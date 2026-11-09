@@ -3,7 +3,9 @@ import time
 import webbrowser
 from tkinter import messagebox
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import track
+from rich.table import Table
 import asyncio
 import random
 import threading
@@ -23,8 +25,21 @@ import multiprocessing
 from vibe_plus import default_state as default_vibe_plus_state
 from vibe_plus import normalize_state as normalize_vibe_plus_state
 from vibe_plus import run as run_vibe_plus
+from case_journal import append_entry as append_case_entry
+from case_journal import normalize_entries as normalize_case_journal
 
 console = Console()
+
+
+def record_case(event_id, description):
+    global case_journal_entries
+    case_journal_entries = append_case_entry(
+        case_journal_entries,
+        day,
+        event_id,
+        description,
+    )
+
 
 def asset_path(filename):
     base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
@@ -325,12 +340,13 @@ def save_game():
         "musordrop": musordrop,
         "tolyayonk": tolyayonk,
         "vibe_plus": vibe_plus_state,
+        "case_journal": case_journal_entries,
     }
     with open("save.json", "w") as f:
         json.dump(save_data, f)
 
 def load_game():
-    global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state
+    global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state, case_journal_entries
     try:
         with open("save.json", "r") as f:
             save_data = json.load(f)
@@ -395,6 +411,7 @@ def load_game():
             musordrop = save_data.get("musordrop", 0)
             tolyayonk = save_data.get("tolyayonk", 0)
             vibe_plus_state = normalize_vibe_plus_state(save_data.get("vibe_plus"))
+            case_journal_entries = normalize_case_journal(save_data.get("case_journal", []))
             ochkoA = save_data.get("ochkoA")
             ochkoB = save_data.get("ochkoB")
             return True
@@ -502,6 +519,7 @@ v220 = 0
 musordrop = 0
 tolyayonk = 0
 vibe_plus_state = default_vibe_plus_state()
+case_journal_entries = []
 cooldowns = {
     "pomit": 0,
     "pomitp": 0,
@@ -1642,6 +1660,10 @@ async def main():
                             time.sleep(2.5)
                             tolea_sdan = 1
                             path_police = 1
+                            record_case(
+                                "police_contact:reported",
+                                "Вы сообщили полиции, что встречали Толю.",
+                            )
                             save_game()
                         elif otzz11 == "2":
                             time.sleep(2.5)
@@ -1654,12 +1676,20 @@ async def main():
                             console.print("На вас накатило чувство, как будто вам стоило бы позвонить толе, но у тебя нету MearePhone-а, телефон для даркнета. Надо бы купить..")
                             time.sleep(2.5)
                             path_police = 2
+                            record_case(
+                                "police_contact:asked_about_tolya",
+                                "Вы скрыли знакомство и узнали, зачем полиция ищет Толю.",
+                            )
                             save_game()
                         elif otzz11 == "3":
                             time.sleep(2.5)
                             console.print("Вы: Не видел.")
                             time.sleep(2.5)
                             path_police = 3
+                            record_case(
+                                "police_contact:denied",
+                                "Вы сказали полиции, что не знаете Толю.",
+                            )
                             save_game()
                         police = 1
                         save_game()
@@ -2918,6 +2948,7 @@ if __name__ == '__main__':
         console.print("[green]Q - Магазин (гвозди, MearePhone)[/]")
         console.print("[green]E - Заглянуть в рюкзак[/]")          
         console.print("[green]H - Написать в поддержку[/]")      
+        console.print("[cyan]J - Журнал дел[/]")
         if day < 3:
             console.print("[bright_magenta]V - Vibe Plus: доступно с 3-го дня[/]")
         else:
@@ -2936,6 +2967,8 @@ if __name__ == '__main__':
                 ent = 13
             elif char.lower() == 'h':
                 ent = 14
+            elif char.lower() == 'j':
+                ent = 16
             elif char.lower() == 'v':
                 ent = 15
         
@@ -3085,6 +3118,7 @@ if __name__ == '__main__':
                 for i in track(range(100), description="Спим...", style="green"):
                     time.sleep(0.125)
                 day += 1
+                record_case(f"day_started:{day}", f"Начался игровой день {day}.")
                 dayav = 0
                 dayav2 = 0
                 cooldowns["dayav"] = time.time() + random.uniform(10.0, 40.0)
@@ -3312,6 +3346,10 @@ if __name__ == '__main__':
                     path_tolya = 1
                     tolya_dialog = 1
                     tolea_sdan = 1
+                    record_case(
+                        "tolya_call:reported",
+                        "Вы признались Толе, что сообщили о нём полиции.",
+                    )
                     save_game()
                 elif otzz_tolya == "2":
                     time.sleep(2.5)
@@ -3342,6 +3380,10 @@ if __name__ == '__main__':
                     path_tolya = 2
                     tolya_dialog = 1
                     daytolya = day
+                    record_case(
+                        "tolya_call:partner",
+                        "Вы согласились работать с Толей; он назначил встречу.",
+                    )
                     save_game()
                 elif otzz_tolya == "3":
                     time.sleep(2.5)
@@ -3358,6 +3400,10 @@ if __name__ == '__main__':
                     path_tolya = 3
                     tolya_dialog = 1
                     koncovka_neutral()
+                    record_case(
+                        "tolya_call:walked_away",
+                        "Вы отказались от совместных дел с Толей.",
+                    )
                     save_game()
             else:
                 console.print("[red]У вас нет MearePhone или вы уже говорили с Толей![/]")
@@ -3534,9 +3580,55 @@ if __name__ == '__main__':
             in_action = False
         elif int(ent) == 15:
             os.system('cls' if os.name == 'nt' else 'clear')
+            previous_vibe_state = vibe_plus_state
             ochko, vibe_plus_state = run_vibe_plus(console, ochko, day, vibe_plus_state)
+            if previous_vibe_state["chapter"] == 7 and vibe_plus_state["chapter"] == 8:
+                side_quest_entries = {
+                    "billing_records": (
+                        "vibe_plus:side_quest:billing_records",
+                        "Побочное дело Vibe Plus: найден журнал двойных списаний.",
+                    ),
+                    "subscriber_testimony": (
+                        "vibe_plus:side_quest:subscriber_testimony",
+                        "Побочное дело Vibe Plus: записаны показания подписчиков.",
+                    ),
+                }
+                side_quest_entry = side_quest_entries.get(vibe_plus_state["side_quest"])
+                if side_quest_entry:
+                    record_case(*side_quest_entry)
+                else:
+                    record_case(
+                        "vibe_plus:side_quest:skipped",
+                        "Вы пропустили побочное дело Vibe Plus.",
+                    )
+            if (
+                previous_vibe_state["chapter"] != 17
+                and vibe_plus_state["chapter"] == 17
+                and vibe_plus_state["ending"]
+            ):
+                record_case(
+                    f"vibe_plus:ending:{vibe_plus_state['ending']}",
+                    f"Досье Vibe Plus закрыто: {vibe_plus_state['ending']}.",
+                )
             save_game()
             time.sleep(1.5)
+            in_action = False
+        elif int(ent) == 16:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            journal_table = Table(show_header=True, header_style="bold cyan")
+            journal_table.add_column("День", style="cyan", justify="right")
+            journal_table.add_column("Сюжетное дело", style="white")
+            if case_journal_entries:
+                for entry in case_journal_entries:
+                    journal_table.add_row(str(entry["day"]), entry["description"])
+            else:
+                journal_table.add_row("—", "Сюжетных записей пока нет.")
+            console.print(Panel(
+                journal_table,
+                title="Журнал дел",
+                border_style="cyan",
+            ))
+            console.input("[dim]Нажмите Enter, чтобы вернуться в меню[/]")
             in_action = False
         else:
             console.print("[red]Неправильное написал[/]")
