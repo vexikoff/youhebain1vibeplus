@@ -279,6 +279,13 @@ def plakat():
     print(plakats)
 
 def save_game():
+    global _last_achievement_points
+    points_delta = ochko - _last_achievement_points
+    if points_delta:
+        refresh_achievements({"points_delta": points_delta})
+    else:
+        refresh_achievements()
+    _last_achievement_points = ochko
     save_data = {
         "ochko": ochko,
         "pomit": pomit,
@@ -359,6 +366,7 @@ def game_snapshot():
         "posilka": posilka,
         "gamecorpscam": gamecorpscam,
         "paranoya_day": paranoya_day,
+        "path_police": path_police,
     }
 
 def achievements_context():
@@ -373,7 +381,7 @@ def refresh_achievements(events=None):
     return False
 
 def load_game():
-    global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state, case_journal_entries
+    global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state, case_journal_entries, achievements_state
     try:
         with open("save.json", "r") as f:
             save_data = json.load(f)
@@ -439,6 +447,7 @@ def load_game():
             tolyayonk = save_data.get("tolyayonk", 0)
             vibe_plus_state = normalize_vibe_plus_state(save_data.get("vibe_plus"))
             case_journal_entries = normalize_case_journal(save_data.get("case_journal", []))
+            achievements_state = achievements.normalize_state(save_data.get("achievements"))
             ochkoA = save_data.get("ochkoA")
             ochkoB = save_data.get("ochkoB")
             return True
@@ -547,6 +556,7 @@ musordrop = 0
 tolyayonk = 0
 vibe_plus_state = default_vibe_plus_state()
 case_journal_entries = []
+achievements_state = achievements.default_state()
 cooldowns = {
     "pomit": 0,
     "pomitp": 0,
@@ -559,6 +569,7 @@ cooldowns = {
 }
 
 load_game()
+_last_achievement_points = ochko
 
 def titry():
     global plakats2
@@ -997,7 +1008,7 @@ def koncovka_dolgo():
     os._exit(0)
 
 async def main():
-    global pomit, v220, pomitp, dike, ksosna, tormoz, tolyayonk, musordrop, darkness, truba, vanya, musor, michc, sport, vany, vexi, ochkonet, knj, nevernulday, nevernul, dro, cdis, cdiss, igr, dss, drc, ochko, zvonok, zvv, rib, rrib, opencr, gamecorp, day, posilka, data_base, chh, dayav, dayav2, mmv, mmv2, imya, ddv, gvozd, in_action, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, police, vany
+    global pomit, v220, pomitp, dike, ksosna, tormoz, tolyayonk, musordrop, darkness, truba, vanya, musor, michc, sport, vany, vexi, ochkonet, knj, nevernulday, nevernul, dro, cdis, cdiss, igr, dss, drc, ochko, zvonok, zvv, rib, rrib, opencr, gamecorp, day, posilka, data_base, chh, dayav, dayav2, mmv, mmv2, imya, ddv, gvozd, in_action, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, police, vany, achievements_state
     
     global cooldowns
     cooldowns["call"] = time.time() + random.uniform(15.0, 20.0)
@@ -1117,6 +1128,7 @@ async def main():
                 if drc == 1:
                     ldk = "Кстати у вас большой член."
                 if answer_call and ra > 0:
+                    refresh_achievements({"event": "call_answered"})
                     if ra == 1:
                         os.system('cls' if os.name == 'nt' else 'clear')
                         time.sleep(1.2)
@@ -2976,6 +2988,7 @@ if __name__ == '__main__':
         console.print("[green]E - Заглянуть в рюкзак[/]")          
         console.print("[green]H - Написать в поддержку[/]")      
         console.print("[cyan]J - Журнал дел[/]")
+        console.print("[bright_magenta]A - Достижения и статистика[/]")
         if day < 3:
             console.print("[bright_magenta]V - Vibe Plus: доступно с 3-го дня[/]")
         else:
@@ -2996,6 +3009,8 @@ if __name__ == '__main__':
                 ent = 14
             elif char.lower() == 'j':
                 ent = 16
+            elif char.lower() == 'a':
+                ent = 17
             elif char.lower() == 'v':
                 ent = 15
         
@@ -3013,6 +3028,7 @@ if __name__ == '__main__':
                 ochko += 28
                 pomit = 0
                 cooldowns["pomit"] = time.time() + random.uniform(10.0, 50.0)
+                refresh_achievements({"activity": "pomit"})
                 save_game()
             else:
                 console.print("[red]Данное действие недоступно. Иди жди![/]")
@@ -3026,6 +3042,7 @@ if __name__ == '__main__':
                 ochko += 24
                 pomitp = 0
                 cooldowns["pomitp"] = time.time() + random.uniform(10.0, 100.0)
+                refresh_achievements({"activity": "pomitp"})
                 save_game()
             else:
                 console.print("[red]Данное действие недоступно. Иди жди![/]")
@@ -3039,6 +3056,7 @@ if __name__ == '__main__':
                 ochko += 36
                 musor = 0
                 cooldowns["musor"] = time.time() + random.uniform(10.0, 200.0)
+                refresh_achievements({"activity": "musor"})
                 save_game()
             else:
                 console.print("[red]Данное действие недоступно. Иди жди![/]")
@@ -3053,6 +3071,7 @@ if __name__ == '__main__':
                 dro = 0
                 drc = 1
                 cooldowns["dro"] = time.time() + random.uniform(20.0, 60.0)
+                refresh_achievements({"activity": "dro"})
                 save_game()
             else:
                 console.print("[red]Данное действие недоступно. Иди жди![/]")
@@ -3066,6 +3085,7 @@ if __name__ == '__main__':
                 ochko += 32
                 igr = 0
                 cooldowns["igr"] = time.time() + random.uniform(100.0, 240.0)
+                refresh_achievements({"activity": "igr"})
                 save_game()
             else:
                 console.print("[red]Данное действие недоступно. Иди жди![/]")
@@ -3073,6 +3093,7 @@ if __name__ == '__main__':
             in_action = False
         elif int(ent) == 6:
             if dss == 1 and rib == 1:
+                refresh_achievements({"event": "fishing_start"})
                 os.system('cls' if os.name == 'nt' else 'clear')
                 console.print("[green]Рыбалка[/]")
                 console.print("Нажми [green]Enter[/] когда удочка над зоной")
@@ -3114,10 +3135,12 @@ if __name__ == '__main__':
                             attempts += 1
                             if green_start <= position < green_end:
                                 ochko += 64
+                                refresh_achievements({"event": "fishing_catch"})
                                 console.print("[green]Попал! +64 очка[/]")
                                 time.sleep(0.5)
                             elif (yellow_start <= position < green_start) or (green_end <= position < yellow_end):
                                 ochko += 32
+                                refresh_achievements({"event": "fishing_catch"})
                                 console.print("[yellow]Попал! +32 очка[/]")
                                 time.sleep(0.5)
                             else:
@@ -3609,6 +3632,7 @@ if __name__ == '__main__':
             os.system('cls' if os.name == 'nt' else 'clear')
             previous_vibe_state = vibe_plus_state
             ochko, vibe_plus_state = run_vibe_plus(console, ochko, day, vibe_plus_state)
+            refresh_achievements({"event": "vibe_plus_visit"})
             if previous_vibe_state["chapter"] == 7 and vibe_plus_state["chapter"] == 8:
                 side_quest_entries = {
                     "billing_records": (
@@ -3655,6 +3679,18 @@ if __name__ == '__main__':
                 title="Журнал дел",
                 border_style="cyan",
             ))
+            console.input("[dim]Нажмите Enter, чтобы вернуться в меню[/]")
+            in_action = False
+        elif int(ent) == 17:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            refresh_achievements()
+            achievements_state = achievements.render(
+                console,
+                achievements_state,
+                game_snapshot(),
+                vibe_plus_state,
+            )
+            save_game()
             console.input("[dim]Нажмите Enter, чтобы вернуться в меню[/]")
             in_action = False
         else:

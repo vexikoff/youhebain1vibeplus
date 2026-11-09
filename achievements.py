@@ -142,7 +142,7 @@ ACHIEVEMENTS = (
         "id": "dlc_side_business",
         "title": "Двойное списание",
         "description": "Закрыть побочное дело внутри Vibe Plus.",
-        "condition": "vibe_side_quest == 'completed'",
+        "condition": "vibe_side_quest in ('billing_records', 'subscriber_testimony', 'completed')",
     },
     {
         "id": "dlc_dossier",
@@ -215,6 +215,8 @@ def normalize_state(value):
 
 def build_context(snapshot, vibe_plus):
     context = {}
+    if not isinstance(snapshot, dict):
+        snapshot = {}
     for key, value in snapshot.items():
         if isinstance(value, bool) or not isinstance(value, int):
             continue
@@ -247,9 +249,13 @@ def check(context):
     result = []
     if not isinstance(context, dict):
         return result
+    variables = dict(context)
+    stats = variables.get("stats")
+    if isinstance(stats, dict):
+        variables.update(stats)
     for achievement in ACHIEVEMENTS:
         try:
-            if eval(achievement["condition"], {"__builtins__": {}}, context):
+            if eval(achievement["condition"], {"__builtins__": {}}, variables):
                 result.append(achievement["id"])
         except Exception:
             continue
@@ -263,7 +269,8 @@ def update(state, context, events=None):
     changed = False
 
     if isinstance(events, dict):
-        field = COUNTER_FIELDS.get(events.get("activity"))
+        activity = events.get("activity")
+        field = COUNTER_FIELDS.get(activity) if isinstance(activity, str) else None
         if field:
             stats[field] += 1
             changed = True
@@ -283,9 +290,10 @@ def update(state, context, events=None):
         if isinstance(delta, int) and not isinstance(delta, bool):
             if delta > 0:
                 stats["points_earned"] += delta
+                changed = True
             elif delta < 0:
                 stats["points_spent"] += -delta
-            changed = True
+                changed = True
 
     if isinstance(context, dict):
         day = context.get("day", 0)
