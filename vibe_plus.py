@@ -130,6 +130,37 @@ CONTINUATION_ENDINGS = {
     ),
 }
 
+EPILOGUE_OPTIONS = {
+    "flash_drive": ("returned", "sealed"),
+    "last_payment": ("reconciled", "escrow", "unverified"),
+    "former_agent": ("testimony", "anonymous", "limited"),
+    "fix_check": ("verified", "monitored", "pending"),
+    "paper_box": ("sealed", "returned", "public", "withheld"),
+}
+
+EPILOGUE_RESULT_TEXT = {
+    "documented_reform": (
+        "Исправление подтверждено",
+        "Последний платёж сверен, исправление проверено, а бумажные договоры "
+        "остались в закрытом архиве с понятной описью.",
+    ),
+    "privacy_preserved": (
+        "Личные данные под защитой",
+        "Флешка и показания остались закрытыми. История закончилась без списка "
+        "чужих адресов и без требования «подтвердить подписку» ещё раз.",
+    ),
+    "public_accountability": (
+        "Публичная проверка",
+        "Согласованные документы и свидетельство бывшего оператора помогли "
+        "подтвердить исправление без публикации личных данных.",
+    ),
+    "followup_required": (
+        "Нужна ещё одна сверка",
+        "Часть документов осталась в коробке, часть — в переписке. Дело закрыто, "
+        "но календарь оставили на видном месте.",
+    ),
+}
+
 ENDING_TEXT = {
     "refund": (
         "Банк вернул деньги. Он не смог вернуть время, проведённое на линии ожидания.",
@@ -216,7 +247,7 @@ ENDING_TEXT = {
 
 def default_state():
     return {
-        "version": 7,
+        "version": 8,
         "chapter": 0,
         "route": "",
         "origin_route": "",
@@ -231,6 +262,10 @@ def default_state():
         "continuation": {name: None for name in CONTINUATION_OPTIONS},
         "continuation_result": "",
         "continuation_ending": "",
+        "epilogue": {name: None for name in EPILOGUE_OPTIONS},
+        "epilogue_progress": 0,
+        "epilogue_active": False,
+        "epilogue_result": "",
     }
 
 
@@ -261,6 +296,10 @@ def normalize_state(value):
     continuation_source = value.get("continuation", {})
     continuation_result = value.get("continuation_result", "")
     continuation_ending = value.get("continuation_ending", "")
+    epilogue_source = value.get("epilogue", {})
+    epilogue_progress = value.get("epilogue_progress", 0)
+    epilogue_active = value.get("epilogue_active", False)
+    epilogue_result = value.get("epilogue_result", "")
 
     if not isinstance(route, str):
         route = ""
@@ -303,6 +342,24 @@ def normalize_state(value):
         continuation_result = ""
     if not isinstance(continuation_ending, str) or continuation_ending not in CONTINUATION_ENDINGS:
         continuation_ending = ""
+    if not isinstance(epilogue_source, dict):
+        epilogue_source = {}
+    epilogue = {
+        name: epilogue_source.get(name)
+        if epilogue_source.get(name) in options
+        else None
+        for name, options in EPILOGUE_OPTIONS.items()
+    }
+    if (
+        not isinstance(epilogue_progress, int)
+        or isinstance(epilogue_progress, bool)
+        or epilogue_progress not in range(6)
+    ):
+        epilogue_progress = 0
+    if not isinstance(epilogue_active, bool):
+        epilogue_active = False
+    if not isinstance(epilogue_result, str) or epilogue_result not in EPILOGUE_RESULT_TEXT:
+        epilogue_result = ""
 
     if source_version == 1 and chapter == 11:
         chapter = 13
@@ -326,6 +383,15 @@ def normalize_state(value):
             previous_ending = ending
     if source_version == 6 and chapter == CHAPTER_INDEX["План последствий"] + 1:
         chapter = CHAPTER_INDEX["Досье закрыто"]
+    if epilogue_progress == 5 and not epilogue_result:
+        epilogue_result = "followup_required"
+    if epilogue_result:
+        epilogue_progress = 5
+        epilogue_active = False
+    elif chapter == CHAPTER_INDEX["Досье закрыто"] and epilogue_progress > 0:
+        epilogue_active = True
+    if chapter != CHAPTER_INDEX["Досье закрыто"]:
+        epilogue_active = False
     if chapter not in range(len(CHAPTERS)):
         chapter = 0
     if source_version < 3 and source_chapter == 11 and not ending and ending_was_valid:
@@ -334,7 +400,7 @@ def normalize_state(value):
         ending = "Вы закрыли досье. Уведомления пока думают, что это не окончательно."
 
     return {
-        "version": 7,
+        "version": 8,
         "chapter": chapter,
         "route": route,
         "origin_route": origin_route,
@@ -349,6 +415,10 @@ def normalize_state(value):
         "continuation": continuation,
         "continuation_result": continuation_result,
         "continuation_ending": continuation_ending,
+        "epilogue": epilogue,
+        "epilogue_progress": epilogue_progress,
+        "epilogue_active": epilogue_active,
+        "epilogue_result": epilogue_result,
     }
 
 
@@ -443,7 +513,15 @@ def _show_dossier(console, state, day, points):
     elif chapter == CHAPTER_INDEX["Кому достанется последнее слово"]:
         status = "Кому достанется последнее слово"
     elif chapter == CHAPTER_INDEX["Досье закрыто"]:
-        status = f"Досье закрыто: {state['ending']}"
+        if state["epilogue_active"]:
+            status = f"Приложения к делу: эпизод {state['epilogue_progress'] + 1}/5"
+        elif state["epilogue_result"]:
+            status = (
+                "Послесловие: "
+                + EPILOGUE_RESULT_TEXT[state["epilogue_result"]][0]
+            )
+        else:
+            status = f"Досье закрыто: {state['ending']}"
     else:
         status = "Ожидание"
 
@@ -463,6 +541,182 @@ def _show_dossier(console, state, day, points):
         padding=(1, 2),
     ))
     console.print(Panel(progress, border_style="cyan", title=f"Досье: {len(CHAPTERS) - 1} игровых глав"))
+
+
+def _run_epilogue_episode(console, points, state):
+    epilogue = state["epilogue"]
+    episode = state["epilogue_progress"]
+
+    if episode == 0:
+        final_scene = CONTINUATION_ENDINGS.get(state["continuation_ending"])
+        console.print(Panel(
+            (
+                f"После финала «{final_scene[0]}» в архиве нашли флешку. "
+                "На ней файл «вернуть_владельцу_и_не_потерять_версию_4». "
+                "Две папки уже спорят, кому её сдавать."
+                if final_scene
+                else "В архиве нашли флешку с файлом «важное_точно_финал». "
+                "Устройство пережило три переезда и один отдел IT."
+            ),
+            border_style="yellow",
+            title="Возврат флешки",
+        ))
+        console.print("[cyan]1.[/] Вернуть флешку владельцам через закрытый архив")
+        console.print("[cyan]2.[/] Запечатать её до подтверждения владельца")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        epilogue["flash_drive"] = "returned" if choice == "1" else "sealed"
+
+    elif episode == 1:
+        flash_scenes = {
+            "returned": "Владельцы подтвердили файлы и попросили вернуть им ещё и время.",
+            "sealed": "Флешка запечатана. Печать попросила не подключать её к компьютеру.",
+        }
+        console.print(Panel(
+            flash_scenes.get(epilogue["flash_drive"], "Флешка ждёт инвентаризации.")
+            + "\nПоследний платёж всё ещё не нашёл владельца строки в выписке.",
+            border_style="yellow",
+            title="Сверка последнего платежа",
+        ))
+        console.print("[cyan]1.[/] Сверить платёж с банковской выпиской")
+        console.print("[cyan]2.[/] Попросить банк временно удержать спорную сумму")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            reconciled = (
+                state["route"] in ("bank", "refund")
+                and state["continuation"]["no_charges"] == "confirmed"
+                and state["evidence"] >= 3
+            )
+            epilogue["last_payment"] = (
+                "reconciled" if reconciled else "unverified"
+            )
+        else:
+            epilogue["last_payment"] = "escrow"
+
+    elif episode == 2:
+        payment_scenes = {
+            "reconciled": "Платёж совпал с выпиской и перестал притворяться подарком.",
+            "escrow": "Сумма удержана до проверки. Банк назвал это паузой, не кнопкой.",
+            "unverified": "Платёж найден, но его назначение снова написано мелким шрифтом.",
+        }
+        console.print(Panel(
+            payment_scenes.get(epilogue["last_payment"], "Выписка просит точные даты.")
+            + "\nБывший оператор поддержки согласился поговорить без меню «нажмите 0».",
+            border_style="yellow",
+            title="Разговор с бывшим оператором",
+        ))
+        console.print("[cyan]1.[/] Попросить оператора подтвердить процедуру")
+        console.print("[cyan]2.[/] Записать показания анонимно")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        can_confirm = (
+            epilogue["flash_drive"] == "returned"
+            and epilogue["last_payment"] == "reconciled"
+            and state["trust_level"] >= 2
+        )
+        if choice == "1":
+            epilogue["former_agent"] = "testimony" if can_confirm else "limited"
+        else:
+            epilogue["former_agent"] = "anonymous"
+
+    elif episode == 3:
+        agent_scenes = {
+            "testimony": "Оператор подтвердил сроки и попросил не цитировать внутреннюю мелодию ожидания.",
+            "anonymous": "Показания записаны без имени. Автозаполнение попыталось его угадать.",
+            "limited": "Оператор подтвердил только то, что кнопка поддержки действительно существовала.",
+        }
+        console.print(Panel(
+            agent_scenes.get(epilogue["former_agent"], "Свидетельства ожидают согласия.")
+            + "\nКомпания обещала исправить последний сбой. Обещание помнит предыдущие обещания.",
+            border_style="yellow",
+            title="Проверка обещанного исправления",
+        ))
+        console.print("[cyan]1.[/] Проверить исправление публично по согласованному протоколу")
+        console.print("[cyan]2.[/] Провести закрытый тест с регулятором")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            can_verify = (
+                state["continuation_ending"] in (
+                    "registry_enforced",
+                    "protected_register",
+                    "independent_oversight",
+                    "subscriber_oversight",
+                    "public_commitment",
+                    "quiet_reform",
+                )
+                and epilogue["last_payment"] == "reconciled"
+                and epilogue["former_agent"] == "testimony"
+                and state["archive_policy"] in ("public_consented", "summary_only")
+                and state["continuation"]["protocol"] == "published"
+            )
+            epilogue["fix_check"] = "verified" if can_verify else "pending"
+        else:
+            monitored = (
+                state["continuation"]["act"] in ("verified", "remedy")
+                and epilogue["last_payment"] in ("reconciled", "escrow")
+            )
+            epilogue["fix_check"] = "monitored" if monitored else "pending"
+
+    else:
+        fix_scenes = {
+            "verified": "Исправление подтвердилось. Компания попросила считать это версией для ограниченного круга дат.",
+            "monitored": "Регулятор проверил исправление. Кнопка сохранилась, автоматическое согласие — нет.",
+            "pending": "Тест отложен: исправление ещё не встретилось с нужной версией приложения.",
+        }
+        console.print(Panel(
+            fix_scenes.get(epilogue["fix_check"], "Результат проверки ещё не записан.")
+            + "\nОсталась коробка бумажных договоров, которую никто не хочет назвать архивом.",
+            border_style="yellow",
+            title="Коробка с договорами",
+        ))
+        console.print("[cyan]1.[/] Передать коробку в закрытый архив с описью")
+        console.print("[cyan]2.[/] Вернуть экземпляры участникам дела")
+        console.print("[cyan]3.[/] Опубликовать только согласованные обезличенные страницы")
+        choice = Prompt.ask("Выбор", choices=["1", "2", "3"], default="1")
+        if choice == "1":
+            epilogue["paper_box"] = "sealed"
+        elif choice == "2":
+            epilogue["paper_box"] = "returned"
+        else:
+            can_publish = (
+                state["archive_policy"] in ("public_consented", "summary_only")
+                and state["trust_level"] >= 2
+            )
+            epilogue["paper_box"] = "public" if can_publish else "withheld"
+        if (
+            epilogue["paper_box"] == "public"
+            and epilogue["fix_check"] == "verified"
+            and epilogue["former_agent"] == "testimony"
+            and epilogue["last_payment"] == "reconciled"
+        ):
+            result = "public_accountability"
+        elif (
+            epilogue["paper_box"] == "sealed"
+            and epilogue["fix_check"] == "verified"
+            and epilogue["last_payment"] == "reconciled"
+            and state["continuation_ending"] in (
+                "registry_enforced",
+                "protected_register",
+                "independent_oversight",
+                "subscriber_oversight",
+                "public_commitment",
+                "quiet_reform",
+            )
+        ):
+            result = "documented_reform"
+        elif (
+            epilogue["former_agent"] == "anonymous"
+            and epilogue["flash_drive"] == "sealed"
+            and epilogue["paper_box"] in ("sealed", "returned")
+        ):
+            result = "privacy_preserved"
+        else:
+            result = "followup_required"
+        state["epilogue_result"] = result
+        state["epilogue_progress"] = 5
+        state["epilogue_active"] = False
+        return points, state
+
+    state["epilogue_progress"] += 1
+    return points, state
 
 
 def run(console, points, day, saved_state):
@@ -1763,6 +2017,12 @@ def run(console, points, day, saved_state):
             ending_message += (
                 f"\n\n[bold bright_magenta]{final_ending[0]}[/]\n\n{final_ending[1]}"
             )
+        epilogue_result = EPILOGUE_RESULT_TEXT.get(state["epilogue_result"])
+        if epilogue_result:
+            ending_message += (
+                f"\n\n[bold cyan]Послесловие: {epilogue_result[0]}[/]\n\n"
+                f"{epilogue_result[1]}"
+            )
         console.print(Panel(
             f"{ending_message}\n\nДокументы: {state['evidence']}   "
             f"Доверие: {state['trust_level']}/4\n"
@@ -1779,12 +2039,26 @@ def run(console, points, day, saved_state):
             border_style="cyan",
             title="[bold]ТИТРЫ[/]",
         ))
+        if state["epilogue_active"]:
+            return _run_epilogue_episode(console, points, state)
         console.print("\n[cyan]1.[/] Начать заново")
         console.print("[red]2.[/] Выйти из DLC")
-        choice = Prompt.ask("Выбор", choices=["1", "2"], default="2")
+        can_start_epilogue = (
+            not state["epilogue_result"]
+            and state["epilogue_progress"] < 5
+        )
+        if can_start_epilogue:
+            console.print("[cyan]3.[/] Открыть приложения к закрытому делу")
+            choices = ["1", "2", "3"]
+        else:
+            choices = ["1", "2"]
+        choice = Prompt.ask("Выбор", choices=choices, default="2")
         if choice == "1":
             state = default_state()
             return points, state
+        if choice == "3" and can_start_epilogue:
+            state["epilogue_active"] = True
+            return _run_epilogue_episode(console, points, state)
         return points, state
 
     return points, state

@@ -5,6 +5,8 @@ from vibe_plus import (
     CHAPTERS,
     CONTINUATION_ENDINGS,
     CONTINUATION_OPTIONS,
+    EPILOGUE_OPTIONS,
+    EPILOGUE_RESULT_TEXT,
     default_state,
     normalize_state,
     run,
@@ -19,12 +21,14 @@ class TestDefaultState(unittest.TestCase):
             "exam_progress", "side_quest", "trust_level", "evidence", "archive_policy",
             "previous_ending", "continuation", "continuation_result",
             "continuation_ending",
+            "epilogue", "epilogue_progress", "epilogue_active",
+            "epilogue_result",
         }
         self.assertEqual(set(state.keys()), expected_keys)
 
     def test_values(self):
         state = default_state()
-        self.assertEqual(state["version"], 7)
+        self.assertEqual(state["version"], 8)
         self.assertEqual(state["chapter"], 0)
         self.assertEqual(state["route"], "")
         self.assertEqual(state["origin_route"], "")
@@ -42,12 +46,16 @@ class TestDefaultState(unittest.TestCase):
         )
         self.assertEqual(state["continuation_result"], "")
         self.assertEqual(state["continuation_ending"], "")
+        self.assertEqual(state["epilogue"], {name: None for name in EPILOGUE_OPTIONS})
+        self.assertEqual(state["epilogue_progress"], 0)
+        self.assertFalse(state["epilogue_active"])
+        self.assertEqual(state["epilogue_result"], "")
 
 
 class TestNormalizeState(unittest.TestCase):
     def test_valid_full_state(self):
         state = {
-            "version": 7,
+            "version": 8,
             "chapter": 5,
             "route": "standard",
             "origin_route": "premium",
@@ -62,6 +70,10 @@ class TestNormalizeState(unittest.TestCase):
             "continuation": default_state()["continuation"],
             "continuation_result": "",
             "continuation_ending": "",
+            "epilogue": default_state()["epilogue"],
+            "epilogue_progress": 0,
+            "epilogue_active": False,
+            "epilogue_result": "",
         }
         normalized = normalize_state(state)
         self.assertEqual(normalized, state)
@@ -83,7 +95,7 @@ class TestNormalizeState(unittest.TestCase):
     def test_missing_fields(self):
         state = {"chapter": 1}
         normalized = normalize_state(state)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
         self.assertEqual(normalized["chapter"], 1)
         self.assertEqual(normalized["route"], "")
         self.assertEqual(normalized["origin_route"], "")
@@ -97,6 +109,10 @@ class TestNormalizeState(unittest.TestCase):
         self.assertEqual(normalized["previous_ending"], "")
         self.assertEqual(normalized["continuation_result"], "")
         self.assertEqual(normalized["continuation_ending"], "")
+        self.assertEqual(normalized["epilogue"], {name: None for name in EPILOGUE_OPTIONS})
+        self.assertEqual(normalized["epilogue_progress"], 0)
+        self.assertFalse(normalized["epilogue_active"])
+        self.assertEqual(normalized["epilogue_result"], "")
 
     def test_invalid_continuation_values_are_discarded(self):
         state = default_state()
@@ -105,28 +121,36 @@ class TestNormalizeState(unittest.TestCase):
             continuation={"letter": ["not", "an", "option"]},
             continuation_result=["not", "a", "result"],
             continuation_ending=["not", "an", "ending"],
+            epilogue=["not", "a", "dictionary"],
+            epilogue_progress=True,
+            epilogue_active="yes",
+            epilogue_result=["not", "a", "result"],
         )
         normalized = normalize_state(state)
         self.assertEqual(normalized["previous_ending"], "")
         self.assertIsNone(normalized["continuation"]["letter"])
         self.assertEqual(normalized["continuation_result"], "")
         self.assertEqual(normalized["continuation_ending"], "")
+        self.assertEqual(normalized["epilogue"], {name: None for name in EPILOGUE_OPTIONS})
+        self.assertEqual(normalized["epilogue_progress"], 0)
+        self.assertFalse(normalized["epilogue_active"])
+        self.assertEqual(normalized["epilogue_result"], "")
 
 
 class TestChapterBounds(unittest.TestCase):
     def test_all_chapters_in_range(self):
         for i in range(len(CHAPTERS)):
-            state = {"version": 7, "chapter": i, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
+            state = {"version": 8, "chapter": i, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
             normalized = normalize_state(state)
             self.assertEqual(normalized["chapter"], i)
 
     def test_chapter_boundary_0(self):
-        state = {"version": 7, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
+        state = {"version": 8, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         self.assertEqual(normalize_state(state)["chapter"], 0)
 
     def test_chapter_boundary_max(self):
         max_chapter = len(CHAPTERS) - 1
-        state = {"version": 7, "chapter": max_chapter, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
+        state = {"version": 8, "chapter": max_chapter, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         self.assertEqual(normalize_state(state)["chapter"], max_chapter)
 
     def test_chapter_above_max(self):
@@ -142,7 +166,7 @@ class TestVersionMigration(unittest.TestCase):
     def test_version_6_unfinished_state_migrates(self):
         state = {"version": 6, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
         self.assertEqual(normalized["chapter"], 0)
 
     def test_version_6_completed_chatgpt_state_moves_to_final_screen(self):
@@ -177,41 +201,69 @@ class TestVersionMigration(unittest.TestCase):
         ):
             self.assertEqual(normalized[field], state[field])
 
+    def test_version_7_mistral_final_and_progress_survive_migration(self):
+        state = default_state()
+        state.update(
+            version=7,
+            chapter=CHAPTERS.index("Досье закрыто"),
+            ending="company_accepted",
+            previous_ending="company_accepted",
+            continuation_ending="independent_oversight",
+            epilogue={
+                "flash_drive": "returned",
+                "last_payment": "reconciled",
+                "former_agent": "testimony",
+                "fix_check": None,
+                "paper_box": None,
+            },
+            epilogue_progress=3,
+            epilogue_active=True,
+        )
+        normalized = normalize_state(state)
+        self.assertEqual(normalized["chapter"], CHAPTERS.index("Досье закрыто"))
+        self.assertEqual(normalized["version"], 8)
+        self.assertEqual(normalized["ending"], "company_accepted")
+        self.assertEqual(normalized["previous_ending"], "company_accepted")
+        self.assertEqual(normalized["continuation_ending"], "independent_oversight")
+        self.assertEqual(normalized["epilogue"], state["epilogue"])
+        self.assertEqual(normalized["epilogue_progress"], 3)
+        self.assertTrue(normalized["epilogue_active"])
+
     def test_version_3_chapter_16_migration(self):
         state = {"version": 3, "chapter": 16, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], CHAPTERS.index("Досье закрыто"))
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_3_chapter_17_migration(self):
         state = {"version": 3, "chapter": 17, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], CHAPTERS.index("Досье закрыто"))
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_2_chapter_14_migration(self):
         state = {"version": 2, "chapter": 14, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], 16)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_2_chapter_15_migration(self):
         state = {"version": 2, "chapter": 15, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], CHAPTERS.index("Досье закрыто"))
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_1_chapter_11_migration(self):
         state = {"version": 1, "chapter": 11, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], 13)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_4_chapter_16_stays_before_archive(self):
         state = {"version": 4, "chapter": 16, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], 16)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_4_response_chapter_moves_after_archive(self):
         state = {"version": 4, "chapter": 17, "route": "", "origin_route": "", "approach": "", "ending": "refund", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
@@ -406,32 +458,32 @@ class TestEnding(unittest.TestCase):
 
 
 class TestVersionField(unittest.TestCase):
-    def test_version_normalized_to_7(self):
+    def test_version_normalized_to_8(self):
         state = {"version": 1, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
-    def test_version_4_upgraded_to_7(self):
+    def test_version_4_upgraded_to_8(self):
         state = {"version": 4, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
-    def test_version_7_preserved(self):
-        state = {"version": 7, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
+    def test_version_8_preserved(self):
+        state = {"version": 8, "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
     def test_version_invalid_type(self):
         state = {"version": "invalid", "chapter": 0, "route": "", "origin_route": "", "approach": "", "ending": "", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
-        self.assertEqual(normalized["version"], 7)
+        self.assertEqual(normalized["version"], 8)
 
 
 class TestMigrationFromOldFormat(unittest.TestCase):
     def test_old_format_with_main_fields(self):
         old = {"chapter": 2, "route": "exam", "ending": "test"}
         new = normalize_state(old)
-        self.assertEqual(new["version"], 7)
+        self.assertEqual(new["version"], 8)
         self.assertEqual(new["chapter"], 2)
         self.assertEqual(new["route"], "exam")
         self.assertEqual(new["origin_route"], "")
@@ -446,7 +498,7 @@ class TestMigrationFromOldFormat(unittest.TestCase):
     def test_old_format_minimal(self):
         old = {"chapter": 1}
         new = normalize_state(old)
-        self.assertEqual(new["version"], 7)
+        self.assertEqual(new["version"], 8)
         self.assertEqual(new["chapter"], 1)
         self.assertEqual(new["route"], "")
         self.assertEqual(new["origin_route"], "")
@@ -519,7 +571,7 @@ class TestNewChapters(unittest.TestCase):
         self.assertEqual(normalized["chapter"], 18)
 
     def test_chapter_19_starts_continuation(self):
-        state = {"version": 7, "chapter": 19, "route": "", "origin_route": "", "approach": "", "ending": "company_accepted", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
+        state = {"version": 8, "chapter": 19, "route": "", "origin_route": "", "approach": "", "ending": "company_accepted", "exam_progress": 0, "side_quest": None, "trust_level": 0, "evidence": 0}
         normalized = normalize_state(state)
         self.assertEqual(normalized["chapter"], 19)
 
@@ -968,6 +1020,210 @@ class TestMistralContinuation(unittest.TestCase):
         with patch("vibe_plus.Prompt.ask", return_value="1"):
             _, restarted = run(console, 200, 10, state)
         self.assertEqual(restarted, default_state())
+
+
+class TestPostCreditsEpilogue(unittest.TestCase):
+    def play(self, state, choice, points=200):
+        with patch("vibe_plus.Prompt.ask", return_value=choice):
+            return run(Mock(), points, 10, state)
+
+    def state_for(self, progress=0, active=True, decisions=None, **state_values):
+        state = default_state()
+        state.update(
+            chapter=CHAPTERS.index("Досье закрыто"),
+            route="bank",
+            ending="company_accepted",
+            previous_ending="company_accepted",
+            evidence=4,
+            trust_level=3,
+            side_quest="subscriber_testimony",
+            archive_policy="public_consented",
+            continuation_result="compliance_monitored",
+            continuation_ending="registry_enforced",
+            epilogue_progress=progress,
+            epilogue_active=active,
+        )
+        state["continuation"].update({
+            "bank_check": "reconciled",
+            "no_charges": "confirmed",
+            "act": "verified",
+            "protocol": "published",
+        })
+        state["epilogue"].update(decisions or {})
+        state.update(state_values)
+        return state
+
+    def play_path(self, choices, **state_values):
+        state = self.state_for(active=False, **state_values)
+        with patch(
+            "vibe_plus.Prompt.ask",
+            side_effect=("3", choices[0]),
+        ):
+            points, state = run(Mock(), 200, 10, state)
+        self.assertTrue(state["epilogue_active"])
+        self.assertEqual(state["epilogue_progress"], 1)
+        state = normalize_state(json.loads(json.dumps(state)))
+        for choice in choices[1:]:
+            points, state = self.play(state, choice, points)
+            state = normalize_state(json.loads(json.dumps(state)))
+        return points, state
+
+    def test_epilogue_is_optional_and_resumes_after_serialization(self):
+        state = self.state_for(active=False)
+        with patch("vibe_plus.Prompt.ask", return_value="2"):
+            points, exited = run(Mock(), 200, 10, state)
+        self.assertEqual(exited, state)
+        self.assertEqual(points, 200)
+
+        with patch(
+            "vibe_plus.Prompt.ask",
+            side_effect=("3", "1"),
+        ):
+            points, active = run(Mock(), points, 10, state)
+        self.assertTrue(active["epilogue_active"])
+        self.assertEqual(active["epilogue_progress"], 1)
+        self.assertEqual(active["epilogue"]["flash_drive"], "returned")
+        self.assertEqual(active["ending"], "company_accepted")
+        self.assertEqual(active["continuation_ending"], "registry_enforced")
+
+        active = normalize_state(json.loads(json.dumps(active)))
+        points, active = self.play(active, "1", points)
+        self.assertEqual(active["epilogue"]["last_payment"], "reconciled")
+        self.assertEqual(active["epilogue_progress"], 2)
+        self.assertEqual(active["ending"], "company_accepted")
+        self.assertEqual(active["previous_ending"], "company_accepted")
+        self.assertEqual(points, 200)
+
+    def test_each_episode_choice_persists_and_advances(self):
+        cases = (
+            (
+                0,
+                {},
+                (("1", "flash_drive", "returned"), ("2", "flash_drive", "sealed")),
+            ),
+            (
+                1,
+                {"flash_drive": "returned"},
+                (("1", "last_payment", "reconciled"), ("2", "last_payment", "escrow")),
+            ),
+            (
+                2,
+                {"flash_drive": "returned", "last_payment": "reconciled"},
+                (("1", "former_agent", "testimony"), ("2", "former_agent", "anonymous")),
+            ),
+            (
+                3,
+                {"last_payment": "reconciled", "former_agent": "testimony"},
+                (("1", "fix_check", "verified"), ("2", "fix_check", "monitored")),
+            ),
+        )
+        for progress, decisions, options in cases:
+            for choice, field, expected in options:
+                with self.subTest(progress=progress, choice=choice):
+                    state = self.state_for(progress, decisions=decisions)
+                    points, result = self.play(state, choice)
+                    self.assertEqual(result["epilogue"][field], expected)
+                    self.assertEqual(result["epilogue_progress"], progress + 1)
+                    self.assertTrue(result["epilogue_active"])
+                    self.assertEqual(result["ending"], "company_accepted")
+                    self.assertEqual(result["continuation_ending"], "registry_enforced")
+                    self.assertEqual(points, 200)
+
+        paper_box_choices = (
+            ("1", {"paper_box": "sealed"}, "documented_reform"),
+            ("2", {"paper_box": "returned"}, "followup_required"),
+            ("3", {"paper_box": "public"}, "public_accountability"),
+        )
+        for choice, stored_value, expected_result in paper_box_choices:
+            with self.subTest(progress=4, choice=choice):
+                decisions = {
+                    "flash_drive": "returned",
+                    "last_payment": "reconciled",
+                    "former_agent": "testimony",
+                    "fix_check": "verified",
+                }
+                state = self.state_for(4, decisions=decisions)
+                points, result = self.play(state, choice)
+                self.assertEqual(result["epilogue"], {
+                    **state["epilogue"],
+                    **stored_value,
+                })
+                self.assertEqual(result["epilogue_result"], expected_result)
+                self.assertEqual(result["epilogue_progress"], 5)
+                self.assertFalse(result["epilogue_active"])
+                self.assertEqual(points, 200)
+
+    def test_all_epilogue_outcomes_follow_saved_choices(self):
+        paths = (
+            (("1", "1", "1", "1", "1"), "documented_reform", {}),
+            (("2", "2", "2", "2", "2"), "privacy_preserved", {}),
+            (("1", "1", "1", "1", "3"), "public_accountability", {}),
+            (
+                ("1", "1", "1", "1", "2"),
+                "followup_required",
+                {
+                    "continuation_ending": "registry_pending",
+                    "archive_policy": "restricted",
+                    "continuation": {
+                        "no_charges": "failed",
+                        "act": "disputed",
+                        "protocol": "withheld",
+                    },
+                },
+            ),
+        )
+        for choices, expected, state_values in paths:
+            with self.subTest(result=expected):
+                points, state = self.play_path(choices, **state_values)
+                self.assertEqual(state["epilogue_result"], expected)
+                self.assertIn(state["epilogue_result"], EPILOGUE_RESULT_TEXT)
+                self.assertEqual(state["epilogue_progress"], 5)
+                self.assertFalse(state["epilogue_active"])
+                self.assertEqual(state["ending"], "company_accepted")
+                self.assertEqual(state["previous_ending"], "company_accepted")
+                self.assertEqual(state["continuation_ending"], state_values.get(
+                    "continuation_ending", "registry_enforced"
+                ))
+                self.assertEqual(points, 200)
+
+    def test_corrupted_or_inconsistent_epilogue_state_is_normalized(self):
+        state = self.state_for(
+            progress=[],
+            epilogue=["invalid"],
+            epilogue_active=1,
+            epilogue_result=["invalid"],
+        )
+        normalized = normalize_state(state)
+        self.assertEqual(normalized["epilogue"], {name: None for name in EPILOGUE_OPTIONS})
+        self.assertEqual(normalized["epilogue_progress"], 0)
+        self.assertFalse(normalized["epilogue_active"])
+        self.assertEqual(normalized["epilogue_result"], "")
+
+        state = self.state_for(progress=3, active=False)
+        normalized = normalize_state(state)
+        self.assertTrue(normalized["epilogue_active"])
+
+    def test_completed_screen_shows_both_story_results_and_epilogue_result(self):
+        state = self.state_for(
+            progress=5,
+            active=False,
+            epilogue_result="documented_reform",
+            continuation_ending="registry_enforced",
+        )
+        console = Mock()
+        with patch("vibe_plus.Prompt.ask", return_value="2"):
+            points, result = run(console, 200, 10, state)
+        final_panel = next(
+            call.args[0]
+            for call in console.print.call_args_list
+            if "Ответ принят." in str(getattr(call.args[0], "renderable", ""))
+        )
+        self.assertIn("Реестр заработал", final_panel.renderable)
+        self.assertIn("Послесловие: Исправление подтверждено", final_panel.renderable)
+        self.assertEqual(result["ending"], "company_accepted")
+        self.assertEqual(result["continuation_ending"], "registry_enforced")
+        self.assertEqual(result["epilogue_result"], "documented_reform")
+        self.assertEqual(points, 200)
 
 
 if __name__ == "__main__":
