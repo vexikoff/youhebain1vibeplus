@@ -35,8 +35,20 @@ CHAPTERS = (
     "Апелляция на апелляцию",
     "Общественный отчёт",
     "План последствий",
+    "Реестр с человеческим лицом",
+    "Повторная сверка обещаний",
+    "День без списаний",
+    "Комиссия по кнопке",
+    "Акт исполнения",
+    "Свидетели процедуры",
+    "Повторное слушание",
+    "Публичный протокол",
+    "Последний компромисс",
+    "Кому достанется последнее слово",
     "Досье закрыто",
 )
+
+CHAPTER_INDEX = {title: index for index, title in enumerate(CHAPTERS)}
 
 CONTINUATION_OPTIONS = {
     "letter": ("opened", "delegated"),
@@ -48,6 +60,16 @@ CONTINUATION_OPTIONS = {
     "appeal": ("regulator", "ombudsman"),
     "report": ("public", "held", "sealed"),
     "plan": ("monitoring", "appeal", "settlement"),
+    "registry": ("transparent", "restricted"),
+    "reconciliation": ("matched", "spot_checked", "discrepancies"),
+    "no_charges": ("confirmed", "monitored", "failed"),
+    "commission": ("independent", "subscribers", "advisory"),
+    "act": ("verified", "remedy", "disputed"),
+    "witnesses": ("corroborated", "protected", "partial"),
+    "hearing": ("accepted", "continued", "closed"),
+    "protocol": ("published", "sealed", "withheld"),
+    "compromise": ("fair", "partial", "refused"),
+    "last_word": ("registry", "control", "community"),
 }
 
 CONTINUATION_RESULT_TEXT = {
@@ -58,6 +80,54 @@ CONTINUATION_RESULT_TEXT = {
     "appeal_pending": "Повторную апелляцию приняли, но доказательств для решения пока недостаточно.",
     "supervised_settlement": "Соглашение оставили под внешним наблюдением и с проверяемыми сроками.",
     "settlement_pending": "Стороны согласились продолжить переговоры под наблюдением.",
+}
+
+CONTINUATION_ENDINGS = {
+    "registry_enforced": (
+        "Реестр заработал",
+        "Единый реестр сверили с платежами и сроками. Компания согласилась "
+        "публиковать отчёты, где цифры не маскируются под пользовательское соглашение.",
+    ),
+    "protected_register": (
+        "Реестр под замком",
+        "Исполнение проверяется в закрытом реестре. Данные не стали публичными, "
+        "а обещаниям впервые назначили ответственных.",
+    ),
+    "independent_oversight": (
+        "Независимый контроль",
+        "Независимая комиссия получила подтверждённые свидетельства и право "
+        "проверять сроки. Компания попросила включить в полномочия календарь.",
+    ),
+    "subscriber_oversight": (
+        "Совет держит руку на кнопке",
+        "Подписчики сами контролируют процедуру и могут поднять вопрос повторно. "
+        "Кнопку «ответить всем» временно убрали из корпоративного интерфейса.",
+    ),
+    "public_commitment": (
+        "Публичное обязательство",
+        "Согласованный протокол опубликован, а сроки стали проверяемыми. "
+        "Компания назвала это прозрачностью и приложила матовую обложку.",
+    ),
+    "quiet_reform": (
+        "Тихая реформа",
+        "Закрытый компромисс сохранил приватность и ввёл независимую сверку. "
+        "Никто не объявил победу, зато списания перестали объявлять себя сами.",
+    ),
+    "registry_pending": (
+        "Реестр ждёт сверки",
+        "Реестр создан, но акт исполнения не подтверждён. Теперь у расхождений "
+        "есть отдельная графа и неловкое название.",
+    ),
+    "oversight_pending": (
+        "Надзор без полномочий",
+        "Контроль назначен, но доказательств пока недостаточно. Комиссия попросила "
+        "не называть её независимой до следующего заседания.",
+    ),
+    "agreement_pending": (
+        "Компромисс на паузе",
+        "Стороны сохранили возможность договориться, но протокол пока не подтверждает "
+        "ни сроки, ни чьё-либо желание их соблюдать.",
+    ),
 }
 
 ENDING_TEXT = {
@@ -146,7 +216,7 @@ ENDING_TEXT = {
 
 def default_state():
     return {
-        "version": 6,
+        "version": 7,
         "chapter": 0,
         "route": "",
         "origin_route": "",
@@ -160,6 +230,7 @@ def default_state():
         "previous_ending": "",
         "continuation": {name: None for name in CONTINUATION_OPTIONS},
         "continuation_result": "",
+        "continuation_ending": "",
     }
 
 
@@ -189,6 +260,7 @@ def normalize_state(value):
     previous_ending = value.get("previous_ending", "")
     continuation_source = value.get("continuation", {})
     continuation_result = value.get("continuation_result", "")
+    continuation_ending = value.get("continuation_ending", "")
 
     if not isinstance(route, str):
         route = ""
@@ -229,6 +301,8 @@ def normalize_state(value):
     }
     if not isinstance(continuation_result, str) or continuation_result not in CONTINUATION_RESULT_TEXT:
         continuation_result = ""
+    if not isinstance(continuation_ending, str) or continuation_ending not in CONTINUATION_ENDINGS:
+        continuation_ending = ""
 
     if source_version == 1 and chapter == 11:
         chapter = 13
@@ -247,9 +321,11 @@ def normalize_state(value):
     if source_version < 5 and chapter >= 17:
         chapter += 1
     if source_version < 6 and chapter == 19:
-        chapter = len(CHAPTERS) - 1
+        chapter = CHAPTER_INDEX["Досье закрыто"]
         if ending and not previous_ending:
             previous_ending = ending
+    if source_version == 6 and chapter == CHAPTER_INDEX["План последствий"] + 1:
+        chapter = CHAPTER_INDEX["Досье закрыто"]
     if chapter not in range(len(CHAPTERS)):
         chapter = 0
     if source_version < 3 and source_chapter == 11 and not ending and ending_was_valid:
@@ -258,7 +334,7 @@ def normalize_state(value):
         ending = "Вы закрыли досье. Уведомления пока думают, что это не окончательно."
 
     return {
-        "version": 6,
+        "version": 7,
         "chapter": chapter,
         "route": route,
         "origin_route": origin_route,
@@ -272,6 +348,7 @@ def normalize_state(value):
         "previous_ending": previous_ending,
         "continuation": continuation,
         "continuation_result": continuation_result,
+        "continuation_ending": continuation_ending,
     }
 
 
@@ -345,7 +422,27 @@ def _show_dossier(console, state, day, points):
         status = "Общественный отчёт"
     elif chapter == 27:
         status = "План последствий"
-    elif chapter == 28:
+    elif chapter == CHAPTER_INDEX["Реестр с человеческим лицом"]:
+        status = "Реестр с человеческим лицом"
+    elif chapter == CHAPTER_INDEX["Повторная сверка обещаний"]:
+        status = "Повторная сверка обещаний"
+    elif chapter == CHAPTER_INDEX["День без списаний"]:
+        status = "День без списаний"
+    elif chapter == CHAPTER_INDEX["Комиссия по кнопке"]:
+        status = "Комиссия по кнопке"
+    elif chapter == CHAPTER_INDEX["Акт исполнения"]:
+        status = "Акт исполнения"
+    elif chapter == CHAPTER_INDEX["Свидетели процедуры"]:
+        status = "Свидетели процедуры"
+    elif chapter == CHAPTER_INDEX["Повторное слушание"]:
+        status = "Повторное слушание"
+    elif chapter == CHAPTER_INDEX["Публичный протокол"]:
+        status = "Публичный протокол"
+    elif chapter == CHAPTER_INDEX["Последний компромисс"]:
+        status = "Последний компромисс"
+    elif chapter == CHAPTER_INDEX["Кому достанется последнее слово"]:
+        status = "Кому достанется последнее слово"
+    elif chapter == CHAPTER_INDEX["Досье закрыто"]:
         status = f"Досье закрыто: {state['ending']}"
     else:
         status = "Ожидание"
@@ -1278,10 +1375,373 @@ def run(console, points, day, saved_state):
                 and state["trust_level"] >= 2
                 else "settlement_pending"
             )
-        state.update(chapter=28, continuation_result=result)
+        state.update(
+            chapter=CHAPTER_INDEX["Реестр с человеческим лицом"],
+            continuation_result=result,
+        )
         return points, state
 
-    if state["chapter"] == 28:
+    if state["chapter"] == CHAPTER_INDEX["Реестр с человеческим лицом"]:
+        report_scenes = {
+            "public": "У отчёта есть согласие и список редакций. Впервые у списка есть список.",
+            "held": "Публикация отложена; реестр может работать без публичной премьеры.",
+            "sealed": "Закрытый отчёт получил номер дела и не получил пресс-релиз.",
+        }
+        console.print(Panel(
+            report_scenes.get(state["continuation"]["report"], "Реестр ждёт правил доступа."),
+            border_style="yellow",
+            title="Реестр с человеческим лицом",
+        ))
+        console.print("[cyan]1.[/] Открыть реестр с согласиями участников")
+        console.print("[cyan]2.[/] Оставить реестр закрытым для судебной группы")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        state["continuation"]["registry"] = "transparent" if choice == "1" else "restricted"
+        state["chapter"] = CHAPTER_INDEX["Повторная сверка обещаний"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Повторная сверка обещаний"]:
+        registry_scenes = {
+            "transparent": "Участники видят только согласованные поля; скрытые поля перестали прятаться за кнопкой «ещё».",
+            "restricted": "Сверку ведут в закрытом реестре. Таблицу всё равно назвали «общедоступная_финальная_2».",
+        }
+        console.print(Panel(
+            registry_scenes.get(state["continuation"]["registry"], "Реестр ожидает первой записи."),
+            border_style="yellow",
+            title="Повторная сверка обещаний",
+        ))
+        console.print("[cyan]1.[/] Сверить сроки с банковскими и судебными документами")
+        console.print("[cyan]2.[/] Выборочно проверить несколько обещаний")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            is_matched = (
+                state["continuation"]["verification"] == "documented"
+                and state["continuation"]["promises"] == "deadlines"
+                and state["continuation"]["bank_check"] == "reconciled"
+                and state["evidence"] >= 3
+            )
+            state["continuation"]["reconciliation"] = (
+                "matched" if is_matched else "discrepancies"
+            )
+        else:
+            state["continuation"]["reconciliation"] = "spot_checked"
+        state["chapter"] = CHAPTER_INDEX["День без списаний"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["День без списаний"]:
+        reconciliation_scenes = {
+            "matched": "Обещания совпали с датами. Компания уточнила, что это не повод делать выводы.",
+            "spot_checked": "Выборка нашла совпадения и одно списание, которое очень хотело остаться вне выборки.",
+            "discrepancies": "В сроках и переводах разошлись даже календарные месяцы.",
+        }
+        console.print(Panel(
+            reconciliation_scenes.get(
+                state["continuation"]["reconciliation"],
+                "Для теста пока не хватает сверенных данных.",
+            ),
+            border_style="yellow",
+            title="День без списаний",
+        ))
+        console.print("[cyan]1.[/] Потребовать подтверждённый день без автоматических списаний")
+        console.print("[cyan]2.[/] Наблюдать за тестовым счётом без приостановки операций")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            confirmed = (
+                state["route"] in ("bank", "refund")
+                and state["continuation"]["bank_check"] == "reconciled"
+                and state["evidence"] >= 3
+            )
+            state["continuation"]["no_charges"] = "confirmed" if confirmed else "failed"
+        else:
+            monitored = state["evidence"] >= 2 and state["trust_level"] >= 1
+            state["continuation"]["no_charges"] = "monitored" if monitored else "failed"
+        state["chapter"] = CHAPTER_INDEX["Комиссия по кнопке"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Комиссия по кнопке"]:
+        no_charge_scenes = {
+            "confirmed": "Списаний не было целый день. Уведомления прислали извинение за тишину.",
+            "monitored": "Тестовый счёт наблюдали. Одно списание тоже наблюдало в ответ.",
+            "failed": "Тест не подтвердился: автоматическое списание опять оказалось автоматическим.",
+        }
+        console.print(Panel(
+            no_charge_scenes.get(
+                state["continuation"]["no_charges"],
+                "Комиссия просит сначала определить предмет проверки.",
+            ),
+            border_style="yellow",
+            title="Комиссия по кнопке",
+        ))
+        console.print("[cyan]1.[/] Назначить независимую комиссию с доступом к документам")
+        console.print("[cyan]2.[/] Передать контроль совету подписчиков")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            independent = (
+                state["evidence"] >= 3
+                and state["trust_level"] >= 2
+                and state["continuation"]["audit"] == "certified"
+            )
+            state["continuation"]["commission"] = (
+                "independent" if independent else "advisory"
+            )
+        else:
+            has_testimony = state["side_quest"] in (
+                "completed",
+                "subscriber_testimony",
+            )
+            state["continuation"]["commission"] = (
+                "subscribers"
+                if has_testimony and state["trust_level"] >= 1
+                else "advisory"
+            )
+        state["chapter"] = CHAPTER_INDEX["Акт исполнения"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Акт исполнения"]:
+        commission_scenes = {
+            "independent": "Комиссия выбрана не по кнопке «самый удобный вывод». Это уже прогресс.",
+            "subscribers": "Совет получил полномочия и отдельный чат без корпоративного модератора.",
+            "advisory": "Комиссия пока консультативная. Она может советовать, в том числе не советовать.",
+        }
+        console.print(Panel(
+            commission_scenes.get(
+                state["continuation"]["commission"],
+                "Состав комиссии ещё предстоит определить.",
+            ),
+            border_style="yellow",
+            title="Акт исполнения",
+        ))
+        console.print("[cyan]1.[/] Подписать акт с проверенными сроками")
+        console.print("[cyan]2.[/] Добавить обязательный план устранения нарушений")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            verified = (
+                state["continuation"]["reconciliation"] == "matched"
+                and state["continuation"]["no_charges"] == "confirmed"
+                and state["continuation"]["commission"]
+                in ("independent", "subscribers")
+            )
+            state["continuation"]["act"] = "verified" if verified else "disputed"
+        else:
+            remedy_ready = (
+                state["evidence"] >= 2
+                and state["continuation"]["no_charges"] in ("confirmed", "monitored")
+            )
+            state["continuation"]["act"] = "remedy" if remedy_ready else "disputed"
+        state["chapter"] = CHAPTER_INDEX["Свидетели процедуры"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Свидетели процедуры"]:
+        act_scenes = {
+            "verified": "Акт подписан на основании сверки, а не на основании хорошего почерка.",
+            "remedy": "План исправления получил сроки. В компании начали уточнять, что значит «скоро».",
+            "disputed": "В акте обнаружился пункт, который каждый участник прочитал по-своему.",
+        }
+        console.print(Panel(
+            act_scenes.get(state["continuation"]["act"], "Акт ещё не готов."),
+            border_style="yellow",
+            title="Свидетели процедуры",
+        ))
+        console.print("[cyan]1.[/] Сопоставить свидетельства подписчиков с документами")
+        console.print("[cyan]2.[/] Передать только обезличенные показания")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            corroborated = (
+                state["side_quest"] in ("completed", "subscriber_testimony")
+                and state["evidence"] >= 3
+                and state["trust_level"] >= 2
+            )
+            state["continuation"]["witnesses"] = (
+                "corroborated" if corroborated else "partial"
+            )
+        else:
+            protected = state["evidence"] >= 2 and state["archive_policy"] is not None
+            state["continuation"]["witnesses"] = (
+                "protected" if protected else "partial"
+            )
+        state["chapter"] = CHAPTER_INDEX["Повторное слушание"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Повторное слушание"]:
+        witness_scenes = {
+            "corroborated": "Свидетельства совпали с документами. Совпадение попросили не считать подозрительным.",
+            "protected": "Имена свидетелей закрыты; показания доступны только участникам слушания.",
+            "partial": "Часть показаний подтвердилась, а часть подтверждает, что люди по-разному помнят кнопки.",
+        }
+        console.print(Panel(
+            witness_scenes.get(
+                state["continuation"]["witnesses"],
+                "Слушание ожидает свидетельств.",
+            ),
+            border_style="yellow",
+            title="Повторное слушание",
+        ))
+        console.print("[cyan]1.[/] Попросить решение по исполнению обязательств")
+        console.print("[cyan]2.[/] Закрыть обсуждение публикации и оставить документы в деле")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            accepted = (
+                state["continuation"]["act"] == "verified"
+                and state["continuation"]["witnesses"] == "corroborated"
+                and state["evidence"] >= 4
+                and state["trust_level"] >= 2
+            )
+            state["continuation"]["hearing"] = "accepted" if accepted else "continued"
+        else:
+            closed = (
+                state["archive_policy"] in ("restricted", "summary_only")
+                and state["continuation"]["act"] in ("verified", "remedy")
+            )
+            state["continuation"]["hearing"] = "closed" if closed else "continued"
+        state["chapter"] = CHAPTER_INDEX["Публичный протокол"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Публичный протокол"]:
+        hearing_scenes = {
+            "accepted": "Слушание подтвердило исполнение. Компания попросила внести возражение к слову «подтвердило».",
+            "continued": "Слушание перенесли; календарь теперь считается участником процесса.",
+            "closed": "Публичную часть закрыли, но документы и сроки остались под контролем.",
+        }
+        console.print(Panel(
+            hearing_scenes.get(
+                state["continuation"]["hearing"],
+                "Протокол пока не получил решения.",
+            ),
+            border_style="yellow",
+            title="Публичный протокол",
+        ))
+        console.print("[cyan]1.[/] Опубликовать согласованный обезличенный протокол")
+        console.print("[cyan]2.[/] Передать закрытый протокол регулятору или омбудсмену")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            can_publish = (
+                state["archive_policy"] in ("public_consented", "summary_only")
+                and state["continuation"]["report"] == "public"
+                and state["trust_level"] >= 2
+            )
+            state["continuation"]["protocol"] = (
+                "published" if can_publish else "withheld"
+            )
+        else:
+            state["continuation"]["protocol"] = "sealed"
+        state["chapter"] = CHAPTER_INDEX["Последний компромисс"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Последний компромисс"]:
+        protocol_scenes = {
+            "published": "Протокол опубликован без личных данных. Комментарии отключили только для юристов.",
+            "sealed": "Закрытый протокол получил штамп, который не пытается быть подписью.",
+            "withheld": "Публикацию отложили до согласия и подтверждения документов.",
+        }
+        console.print(Panel(
+            protocol_scenes.get(
+                state["continuation"]["protocol"],
+                "Протокол ожидает решения о доступе.",
+            ),
+            border_style="yellow",
+            title="Последний компромисс",
+        ))
+        console.print("[cyan]1.[/] Закрепить справедливые сроки и право повторной проверки")
+        console.print("[cyan]2.[/] Отказаться от компромисса и оставить надзор открытым")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            fair = (
+                state["continuation"]["bank_check"] == "reconciled"
+                and state["continuation"]["act"] in ("verified", "remedy")
+                and state["continuation_result"]
+                in ("compliance_monitored", "appeal_reopened", "supervised_settlement")
+                and state["trust_level"] >= 2
+            )
+            state["continuation"]["compromise"] = "fair" if fair else "partial"
+        else:
+            state["continuation"]["compromise"] = "refused"
+        state["chapter"] = CHAPTER_INDEX["Кому достанется последнее слово"]
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Кому достанется последнее слово"]:
+        compromise_scenes = {
+            "fair": "Сроки и повторная проверка согласованы. Слово «окончательно» из текста убрали.",
+            "partial": "Компромисс записан, но сроки попросили прислать отдельным письмом.",
+            "refused": "Компромисса нет. Зато теперь никто не обязан делать вид, что он есть.",
+        }
+        console.print(Panel(
+            compromise_scenes.get(
+                state["continuation"]["compromise"],
+                "Последнее решение ждёт участников.",
+            ),
+            border_style="yellow",
+            title="Кому достанется последнее слово",
+        ))
+        console.print("[cyan]1.[/] Передать контроль реестру обязательств")
+        console.print("[cyan]2.[/] Оставить последнее слово независимой комиссии")
+        console.print("[cyan]3.[/] Утвердить публичный или закрытый компромисс")
+        choice = Prompt.ask("Выбор", choices=["1", "2", "3"], default="1")
+        if choice == "1":
+            state["continuation"]["last_word"] = "registry"
+            if (
+                state["continuation"]["registry"] == "transparent"
+                and state["continuation"]["no_charges"] == "confirmed"
+                and state["continuation"]["act"] == "verified"
+                and state["evidence"] >= 4
+            ):
+                result = "registry_enforced"
+            elif (
+                state["continuation"]["registry"] == "restricted"
+                and state["archive_policy"] in ("restricted", "summary_only")
+                and state["continuation"]["no_charges"] == "confirmed"
+                and state["continuation"]["act"] == "verified"
+            ):
+                result = "protected_register"
+            else:
+                result = "registry_pending"
+        elif choice == "2":
+            state["continuation"]["last_word"] = "control"
+            if (
+                state["continuation"]["commission"] == "independent"
+                and state["continuation"]["witnesses"] == "corroborated"
+                and state["continuation"]["hearing"] == "accepted"
+                and state["evidence"] >= 4
+                and state["trust_level"] >= 2
+            ):
+                result = "independent_oversight"
+            elif (
+                state["continuation"]["commission"] == "subscribers"
+                and state["continuation"]["witnesses"] == "corroborated"
+                and state["continuation"]["hearing"] == "accepted"
+                and state["side_quest"] in ("completed", "subscriber_testimony")
+                and state["trust_level"] >= 2
+            ):
+                result = "subscriber_oversight"
+            else:
+                result = "oversight_pending"
+        else:
+            state["continuation"]["last_word"] = "community"
+            if (
+                state["continuation"]["protocol"] == "published"
+                and state["continuation"]["compromise"] == "fair"
+                and state["continuation"]["report"] == "public"
+                and state["route"] in ("union", "press", "regulator", "bank", "refund")
+                and state["evidence"] >= 3
+                and state["trust_level"] >= 2
+            ):
+                result = "public_commitment"
+            elif (
+                state["continuation"]["protocol"] == "sealed"
+                and state["continuation"]["compromise"] == "fair"
+                and state["archive_policy"] in ("restricted", "summary_only")
+                and state["route"] in ("bank", "refund", "regulator")
+                and state["evidence"] >= 3
+                and state["trust_level"] >= 2
+            ):
+                result = "quiet_reform"
+            else:
+                result = "agreement_pending"
+        state.update(
+            chapter=CHAPTER_INDEX["Досье закрыто"],
+            continuation_ending=result,
+        )
+        return points, state
+
+    if state["chapter"] == CHAPTER_INDEX["Досье закрыто"]:
         ending = ENDING_TEXT.get(state["ending"])
         if ending:
             ending_title, ending_details = ending
@@ -1298,12 +1758,26 @@ def run(console, points, day, saved_state):
             ending_message += f"\n\n[bold cyan]Прежний итог: {previous_title}[/]"
         if continuation_result:
             ending_message += f"\n\n[bold cyan]Продолжение: {continuation_result}[/]"
+        final_ending = CONTINUATION_ENDINGS.get(state["continuation_ending"])
+        if final_ending:
+            ending_message += (
+                f"\n\n[bold bright_magenta]{final_ending[0]}[/]\n\n{final_ending[1]}"
+            )
         console.print(Panel(
             f"{ending_message}\n\nДокументы: {state['evidence']}   "
             f"Доверие: {state['trust_level']}/4\n"
-            "[cyan]Нажмите Enter для выхода[/]",
+            "[cyan]Нажмите Enter, чтобы продолжить к титрам[/]",
             border_style="bright_magenta",
             title="[bold]VIBE PLUS[/]",
+        ))
+        console.print(Panel(
+            "Координация расследования — подписчики, которые дочитали до сноски.\n"
+            "Сверка документов — банковская выписка и тот самый степлер.\n"
+            "Независимый надзор — люди, которым дали календарь и право задавать вопросы.\n"
+            "Архив — согласия, закрытые папки и одна таблица с честным названием.\n"
+            "Благодарим свидетелей, участников слушаний и кнопку отмены за выдержку.",
+            border_style="cyan",
+            title="[bold]ТИТРЫ[/]",
         ))
         console.print("\n[cyan]1.[/] Начать заново")
         console.print("[red]2.[/] Выйти из DLC")
