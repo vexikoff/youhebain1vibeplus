@@ -2918,7 +2918,10 @@ if __name__ == '__main__':
         console.print("[green]Q - Магазин (гвозди, MearePhone)[/]")
         console.print("[green]E - Заглянуть в рюкзак[/]")          
         console.print("[green]H - Написать в поддержку[/]")      
-        console.print("[bright_magenta]V - Vibe Plus: условия применения[/]")
+        if day < 3:
+            console.print("[bright_magenta]V - Vibe Plus: доступно с 3-го дня[/]")
+        else:
+            console.print("[bright_magenta]V - Открыть Vibe Plus[/]")
         console.print("Выберите что вам сделать: ")
         ent = 0
         char = None
