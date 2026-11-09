@@ -210,3 +210,35 @@
 
 Ограничения или нерешённые пункты:
 - Полное интерактивное прохождение игры не выполнялось.
+
+## 2026-11-09 — hotfix cpuinfo и новые задания
+
+Выполнено:
+- По `git blame` выяснено, что вызов `get_cpu_info()` без импорта впервые попал в `main.py` в исходном коммите `969413b` от vexikoff; это не ошибка Qwen, GLM или ChatGPT. В `COPILOT_WORK.md` фиксирую предупреждение автору исходного кода: перед выпуском проверять все внешние вызовы и зависимости; пропущенный импорт ломал экран отправки обращения в поддержку.
+- Исправлен импорт в `main.py`, добавлены фиксированные зависимости `py-cpuinfo==9.0.0` и ранее отсутствовавшие прямые runtime-зависимости `requests==2.34.2`, `textual==8.2.8`; тесты проверяют импорты и manifest.
+- Переведён `requirements.txt` из UTF-16 в UTF-8, чтобы зависимости корректно просматривались в diff и редакторах.
+- ChatGPT назначен новый модульный DLC-этап «Диспетчер жалоб» после архива жалоб.
+- Mistral назначена следующая глава-финализация после работы ChatGPT.
+- GLM разрешено начать систему повторяемых корпоративных звонков после публикации hotfix; целевая интеграция `main.py` должна начинаться на чистой ветке.
+
+Файлы:
+- `main.py`
+- `requirements.txt`
+- `test_support_cpuinfo.py`
+- `CHATGPT.md`
+- `MISTRAL.md`
+- `GLM.md`
+- `COPILOT.md`
+- `COPILOT_WORK.md`
+
+Проверки:
+- `python -m unittest -q test_support_cpuinfo test_achievements test_case_journal test_build_preflight test_vibe_plus` — 90 тестов прошли.
+- `python -m py_compile main.py test_support_cpuinfo.py achievements.py case_journal.py vibe_plus.py` — успешно.
+- `python build_preflight.py` — успешно.
+- `python -m pip install --dry-run -r requirements.txt` — все зависимости распознаются и доступны.
+- Пересобран Windows x64 onedir EXE; PyInstaller не сообщает о пропущенном `cpuinfo`, EXE стартовал без немедленного завершения, все 10 WAV-ресурсов присутствуют.
+- Новый ZIP: `YouheBain1-1.0.0-beta-windows-x64.zip`, SHA-256 `E8F4F3C38F2023A2AE67CE47DE9C2B5528866C0B6984585A481C6B19CE542074`.
+
+Ограничения или нерешённые пункты:
+- Полное интерактивное прохождение игры и отправка реального сообщения в службу поддержки не выполнялись.
+- После коммита hotfix нужно заменить asset в релизе `1.0.0` и передвинуть tag на этот commit.

@@ -17,6 +17,7 @@ import pygame
 import requests
 import uuid
 import platform
+from cpuinfo import get_cpu_info
 from textual.app import App
 from textual.widgets import Input, Button
 from textual.containers import Horizontal, Vertical
