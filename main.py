@@ -23,6 +23,7 @@ import multiprocessing
 from vibe_plus import default_state as default_vibe_plus_state
 from vibe_plus import normalize_state as normalize_vibe_plus_state
 from vibe_plus import run as run_vibe_plus
+import achievements
 
 console = Console()
 
@@ -325,9 +326,35 @@ def save_game():
         "musordrop": musordrop,
         "tolyayonk": tolyayonk,
         "vibe_plus": vibe_plus_state,
+        "achievements": achievements_state,
     }
     with open("save.json", "w") as f:
         json.dump(save_data, f)
+
+def game_snapshot():
+    return {
+        "ochko": ochko,
+        "day": day,
+        "dss": dss,
+        "opencr": opencr,
+        "data_base": data_base,
+        "tolea_sdan": tolea_sdan,
+        "path_tolya": path_tolya,
+        "posilka": posilka,
+        "gamecorpscam": gamecorpscam,
+        "paranoya_day": paranoya_day,
+    }
+
+def achievements_context():
+    return achievements.build_context(game_snapshot(), vibe_plus_state)
+
+def refresh_achievements(events=None):
+    global achievements_state
+    new_state = achievements.update(achievements_state, achievements_context(), events)
+    if new_state is not achievements_state:
+        achievements_state = new_state
+        return True
+    return False
 
 def load_game():
     global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state
