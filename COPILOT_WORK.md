@@ -104,6 +104,28 @@
 Ограничения или нерешённые пункты:
 - Файлы задают очередность, но не запускают внешние модели автоматически.
 
+## 2026-11-09 — PyInstaller preflight checker
+
+Выполнено:
+- Создана автономная проверка `build_preflight.py`: сверяет WAV-ресурсы, используемые через `asset_path` в `main.py`, с `Analysis.datas` каждого spec-файла.
+- Проверяются наличие иконки и аудиофайлов, непустые ресурсы, включённый console mode, совпадение имён EXE и COLLECT, а также синтаксическая целостность spec.
+- Добавлены шесть тестов с временными фиктивными проектами и проверкой ошибок конфигурации.
+
+Файлы:
+- `build_preflight.py`
+- `test_build_preflight.py`
+- `COPILOT.md`
+- `COPILOT_WORK.md`
+
+Проверки:
+- `python -m unittest -q test_build_preflight` — 6 тестов прошли.
+- `python build_preflight.py` — текущие spec-файлы и ресурсы прошли preflight.
+- `python -m py_compile build_preflight.py test_build_preflight.py` — успешно.
+- `git diff --check` — успешно.
+
+Ограничения или нерешённые пункты:
+- Проверка статически разбирает spec-файлы; фактическую сборку PyInstaller она не выполняет.
+
 ## 2026-11-09 — правило коммита после правок
 
 Выполнено:
