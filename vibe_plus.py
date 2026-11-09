@@ -24,6 +24,8 @@ CHAPTERS = (
     "Допрос представителя Vibe Plus",
     "Подготовка публичного слушания",
     "Второе заседание",
+    "Архив жалоб",
+    "Ответ компании",
     "Досье закрыто",
 )
 
@@ -78,12 +80,42 @@ ENDING_TEXT = {
         "Под давлением доказательств и публичного внимания компания отозвала "
         "все претензии. Но оставила за собой право изменить мнение.",
     ),
+    "company_accepted": (
+        "Ответ принят.",
+        "Компания признала ошибку и предложила выгодные условия. "
+        "Вы подписали соглашение, но мелкий шрифт остался.",
+    ),
+    "counter_claim": (
+        "Встречный иск.",
+        "Ваше встречное требование заставило компанию уступить. "
+        "Теперь у вас есть не только компенсация, но и гарантии.",
+    ),
+    "third_party": (
+        "Передача документов.",
+        "Третья сторона инициировала независимое расследование. "
+        "Компания потеряла лицензию, а вы получили моральное удовлетворение.",
+    ),
+    "consented_archive": (
+        "Публикация с согласием.",
+        "Обезличенные истории опубликованы только с разрешения рассказчиков. "
+        "Компания получила ответ общественности, а не список чужих адресов.",
+    ),
+    "protected_archive": (
+        "Защищённый архив.",
+        "Суд принял материалы с ограниченным доступом. Истории помогли делу, "
+        "не превращаясь в публичное досье на пострадавших.",
+    ),
+    "anonymous_summary": (
+        "Обезличенная сводка.",
+        "Третья сторона получила только сводные данные. Отдельные истории "
+        "остались закрытыми, и это тоже оказалось полезным решением.",
+    ),
 }
 
 
 def default_state():
     return {
-        "version": 3,
+        "version": 5,
         "chapter": 0,
         "route": "",
         "origin_route": "",
@@ -93,6 +125,7 @@ def default_state():
         "side_quest": None,
         "trust_level": 0,
         "evidence": 0,
+        "archive_policy": None,
     }
 
 
@@ -118,6 +151,7 @@ def normalize_state(value):
     side_quest = value.get("side_quest", None)
     trust_level = value.get("trust_level", 0)
     evidence = value.get("evidence", 0)
+    archive_policy = value.get("archive_policy", None)
 
     if not isinstance(route, str):
         route = ""
@@ -137,6 +171,15 @@ def normalize_state(value):
         trust_level = 0
     if not isinstance(evidence, int) or isinstance(evidence, bool) or evidence < 0:
         evidence = 0
+    if archive_policy not in (
+        None,
+        "public_consented",
+        "consent_pending",
+        "restricted",
+        "summary_only",
+        "skipped",
+    ):
+        archive_policy = None
 
     if source_version == 1 and chapter == 11:
         chapter = 13
@@ -144,15 +187,25 @@ def normalize_state(value):
         chapter = 16
     if source_version == 2 and chapter == 15:
         chapter = 17
+    if source_version == 3 and chapter == 16:
+        chapter = 17
+    if source_version == 3 and chapter == 17:
+        chapter = 18
     if source_version < 3 and chapter == 15:
         chapter = 17
+    if source_version < 4 and chapter == 17:
+        chapter = 18
+    if source_version < 5 and chapter >= 17:
+        chapter += 1
+    if chapter not in range(len(CHAPTERS)):
+        chapter = 0
     if source_version < 3 and source_chapter == 11 and not ending and ending_was_valid:
         ending = "Вы закрыли досье. Уведомления пока думают, что это не окончательно."
     if source_version < 3 and source_chapter == 15 and not ending and ending_was_valid:
         ending = "Вы закрыли досье. Уведомления пока думают, что это не окончательно."
 
     return {
-        "version": 3,
+        "version": 5,
         "chapter": chapter,
         "route": route,
         "origin_route": origin_route,
@@ -162,6 +215,7 @@ def normalize_state(value):
         "side_quest": side_quest,
         "trust_level": trust_level,
         "evidence": evidence,
+        "archive_policy": archive_policy,
     }
 
 
@@ -190,7 +244,11 @@ def _show_dossier(console, state, day, points):
     elif chapter == 6:
         status = "Сбор доказательств"
     elif chapter == 7:
-        status = "Побочное дело" + (" — выполнено" if state["side_quest"] == "completed" else "")
+        status = "Побочное дело" + (
+            " — выполнено"
+            if state["side_quest"] in ("completed", "billing_records", "subscriber_testimony")
+            else ""
+        )
     elif chapter == 8:
         status = "Финальное заседание"
     elif chapter == 9:
@@ -204,8 +262,16 @@ def _show_dossier(console, state, day, points):
     elif chapter == 13:
         status = f"Найдено документов: {state['evidence']}"
     elif chapter == 14:
-        status = "Повторное заседание"
+        status = "Допрос представителя Vibe Plus"
     elif chapter == 15:
+        status = "Подготовка публичного слушания"
+    elif chapter == 16:
+        status = "Второе заседание"
+    elif chapter == 17:
+        status = "Архив жалоб"
+    elif chapter == 18:
+        status = "Ответ компании"
+    elif chapter == 19:
         status = f"Досье закрыто: {state['ending']}"
     else:
         status = "Ожидание"
@@ -225,7 +291,7 @@ def _show_dossier(console, state, day, points):
         subtitle="[dim]Любое сходство с подписками случайно и списывается ежемесячно[/]",
         padding=(1, 2),
     ))
-    console.print(Panel(progress, border_style="cyan", title="Досье: 18 игровых глав"))
+    console.print(Panel(progress, border_style="cyan", title="Досье: 19 игровых глав"))
 
 
 def run(console, points, day, saved_state):
@@ -428,17 +494,30 @@ def run(console, points, day, saved_state):
 
     if state["chapter"] == 7:
         console.print(Panel(
-            "Побочное дело: нужно найти дополнительные доказательства.\n"
-            "Это не обязательно для основного прохождения, но даёт бонусы.",
+            "Побочное дело: можно проверить журнал списаний или найти других "
+            "подписчиков. Оно необязательно и не блокирует основное дело.",
             border_style="yellow",
         ))
-        console.print("[cyan]1.[/] Выполнить побочное дело (+100 очков)")
-        console.print("[cyan]2.[/] Пропустить побочное дело")
-        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        console.print("[cyan]1.[/] Проверить журнал двойных списаний")
+        console.print("[cyan]2.[/] Собрать показания других подписчиков")
+        console.print("[cyan]3.[/] Пропустить побочное дело")
+        choice = Prompt.ask("Выбор", choices=["1", "2", "3"], default="1")
         if choice == "1":
             points += 100
-            state.update(chapter=8, side_quest="completed", trust_level=min(state["trust_level"] + 1, 4))
-            console.print("[green]Побочное дело выполнено! +100 очков[/]")
+            state.update(
+                chapter=8,
+                side_quest="billing_records",
+                trust_level=min(state["trust_level"] + 1, 4),
+            )
+            console.print("[green]Журнал списаний приложен к делу. +100 очков[/]")
+        elif choice == "2":
+            points += 100
+            state.update(
+                chapter=8,
+                side_quest="subscriber_testimony",
+                trust_level=min(state["trust_level"] + 1, 4),
+            )
+            console.print("[green]Показания подписчиков записаны. +100 очков[/]")
         else:
             state.update(chapter=8)
         return points, state
@@ -541,7 +620,7 @@ def run(console, points, day, saved_state):
                     ending_key = "full_text"
                 elif state["origin_route"] in ("press", "consultant", "tolya"):
                     ending_key = state["origin_route"]
-            if state["side_quest"] == "completed":
+            if state["side_quest"] in ("completed", "billing_records", "subscriber_testimony"):
                 ending_key = "perfect"
             state.update(chapter=11, ending=endings.get(ending_key, "Подписка оформлена."))
             if choice == "1":
@@ -605,8 +684,15 @@ def run(console, points, day, saved_state):
             "exploit": "Вы перечитываете условия компании. На этот раз ищете не кнопку "
             "«согласен», а пункт, который они забыли проверить.",
         }
+        side_quest_clues = {
+            "completed": "Материалы побочного дела подтверждают, что списания были не единичными.",
+            "billing_records": "Журнал показывает повторные списания по одному и тому же пункту.",
+            "subscriber_testimony": "Подписчики подтверждают, что уведомления о списаниях не приходили.",
+        }
+        side_quest_clue = side_quest_clues.get(state["side_quest"], "")
         console.print(Panel(
-            evidence_scenes.get(state["route"], "Архив ждёт документы."),
+            evidence_scenes.get(state["route"], "Архив ждёт документы.")
+            + (f"\n\n{side_quest_clue}" if side_quest_clue else ""),
             border_style="yellow",
             title="Сбор новых доказательств",
         ))
@@ -617,7 +703,8 @@ def run(console, points, day, saved_state):
         if choice == "1":
             state["evidence"] += 1
         elif choice == "2":
-            state["evidence"] += 2 if state["side_quest"] == "completed" else 1
+            has_billing_records = state["side_quest"] in ("completed", "billing_records")
+            state["evidence"] += 2 if has_billing_records else 1
         else:
             state["evidence"] += 1
         state["chapter"] = 14
@@ -673,9 +760,16 @@ def run(console, points, day, saved_state):
             "exploit": "Вы изучаете найденные лазейки. Каждая из них ведёт "
             "к новому уровню подписки.",
         }
+        side_quest_scenes = {
+            "completed": "Материалы побочного дела готовы для приложения к заявлению.",
+            "billing_records": "Журнал списаний можно приложить к публикации.",
+            "subscriber_testimony": "Подписчики готовы подтвердить показания на слушании.",
+        }
+        side_quest_scene = side_quest_scenes.get(state["side_quest"], "")
         console.print(Panel(
             preparation_scenes.get(state["route"], "Подготовка к публичному слушанию. "
-            "Все взгляды обращены на вас."),
+            "Все взгляды обращены на вас.")
+            + (f"\n\n{side_quest_scene}" if side_quest_scene else ""),
             border_style="yellow",
             title="Подготовка публичного слушания",
         ))
@@ -690,7 +784,11 @@ def run(console, points, day, saved_state):
             state["evidence"] += 1
             console.print("[green]Публикация вызвала резонанс! +1 доверие, +1 документ[/]")
         elif choice == "2":
-            state["evidence"] += 2 if state["side_quest"] == "completed" else 1
+            has_subscriber_testimony = state["side_quest"] in (
+                "completed",
+                "subscriber_testimony",
+            )
+            state["evidence"] += 2 if has_subscriber_testimony else 1
             console.print("[green]Поддержка подписчиков помогла![/]")
         state["chapter"] = 16
         return points, state
@@ -741,6 +839,118 @@ def run(console, points, day, saved_state):
         return points, state
 
     if state["chapter"] == 17:
+        console.print(Panel(
+            "В досье есть обезличенные истории пострадавших. Имена, адреса и "
+            "контакты в архив не добавляются. Публикация возможна только с "
+            "явным согласием рассказчиков.",
+            border_style="yellow",
+            title="Архив жалоб",
+        ))
+        console.print(
+            f"[yellow]Документов: {state['evidence']}   "
+            f"Доверие: {state['trust_level']}/4[/]"
+        )
+        console.print("[cyan]1.[/] Опубликовать истории после подтверждённого согласия и обезличивания")
+        console.print("[cyan]2.[/] Запросить согласие, оставив архив закрытым до ответа")
+        console.print("[cyan]3.[/] Ограничить доступ к архиву судебной группой")
+        console.print("[cyan]4.[/] Не публиковать истории; передать обезличенную сводку")
+        console.print("[cyan]5.[/] Пропустить архив жалоб")
+        choice = Prompt.ask("Выбор", choices=["1", "2", "3", "4", "5"], default="5")
+        if choice == "1":
+            if state["evidence"] >= 2 and state["trust_level"] >= 2:
+                archive_policy = "public_consented"
+                console.print("[green]Согласие подтверждено; опубликована только обезличенная подборка.[/]")
+            else:
+                archive_policy = "consent_pending"
+                console.print("[yellow]Сначала нужны проверенные документы и доверие рассказчиков. Публикация отложена.[/]")
+        elif choice == "2":
+            archive_policy = "consent_pending"
+            console.print("[cyan]Запрос отправлен. Архив останется закрытым до ответа.[/]")
+        elif choice == "3":
+            archive_policy = "restricted"
+            console.print("[cyan]Архив доступен только судебной группе; публичной публикации не будет.[/]")
+        elif choice == "4":
+            archive_policy = "summary_only"
+            console.print("[cyan]В дело попадёт только обезличенная сводка, не отдельные истории.[/]")
+        else:
+            archive_policy = "skipped"
+            console.print("[dim]Архив пропущен. Рассмотрение дела продолжается.[/]")
+        state.update(chapter=18, archive_policy=archive_policy)
+        return points, state
+
+    if state["chapter"] == 18:
+        response_scenes = {
+            "refund": "Компания согласна вернуть деньги. В письме сказано: "
+            "«Ошибка код 404: ваших денег у нас нет». Но чек прилагается.",
+            "regulator": "Компания предлагает урегулировать вопрос до судебного разбирательства. "
+            "Их юристы уже подготовили новый договор.",
+            "union": "Компания предлагает встретиться с каждым подписчиком лично. "
+            "В отдельности условия звучат иначе.",
+            "public_exposure": "Компания пытается опровергнуть публикацию. "
+            "Их пресс-релиз длиннее вашего досье.",
+            "legal_victory": "Компания предлагает мировое соглашение. "
+            "Они называют это победой, вы — компромиссом.",
+            "corporate_surrender": "Компания признаёт поражение и обещает исправиться. "
+            "Но в мелком шрифте что-то про «бету».",
+            "settlement": "Компания готова выплатить компенсацию. "
+            "Сумма указана, но условия получения — на отдельной странице.",
+            "whistleblower": "Компания угрожает судом за клевету. "
+            "Их адвокаты уже ждут вашего ответа.",
+            "loophole": "Компания нашла лазейку в вашем иске. "
+            "Они предлагают начать всё сначала.",
+            "appeal_denied": "Компания игнорирует апелляцию. "
+            "Они считают, что время работает на них.",
+        }
+        archive_scenes = {
+            "public_consented": "Обезличенные истории опубликованы с разрешения рассказчиков.",
+            "consent_pending": "Согласия ещё ждут; содержание архива не раскрывается.",
+            "restricted": "Доступ к архиву ограничен судебной группой.",
+            "summary_only": "Отдельные истории закрыты; в деле только обезличенная сводка.",
+            "skipped": "Архив жалоб не создавался.",
+        }
+        archive_scene = archive_scenes.get(state["archive_policy"], "")
+        console.print(Panel(
+            response_scenes.get(state["ending"], "Компания подготовила официальный ответ. "
+            "Он начинается с извинений и заканчивается новым предложением.")
+            + (f"\n\n{archive_scene}" if archive_scene else ""),
+            border_style="yellow",
+            title="Ответ компании",
+        ))
+        console.print("[cyan]1.[/] Принять ответ компании")
+        console.print("[cyan]2.[/] Предъявить встречное требование")
+        console.print("[cyan]3.[/] Передать документы третьей стороне")
+        choice = Prompt.ask("Выбор", choices=["1", "2", "3"], default="1")
+        if choice == "1":
+            if (
+                state["archive_policy"] == "public_consented"
+                and state["evidence"] >= 2
+                and state["trust_level"] >= 2
+            ):
+                final_ending = "consented_archive"
+            else:
+                final_ending = "company_accepted"
+        elif choice == "2":
+            if (
+                state["archive_policy"] == "restricted"
+                and state["evidence"] >= 2
+                and state["trust_level"] >= 2
+            ):
+                final_ending = "protected_archive"
+            else:
+                final_ending = "counter_claim"
+        else:
+            if (
+                state["archive_policy"] == "summary_only"
+                and state["evidence"] >= 2
+                and state["trust_level"] >= 1
+            ):
+                final_ending = "anonymous_summary"
+            else:
+                final_ending = "third_party"
+        state.update(chapter=19, ending=final_ending)
+        return points, state
+
+    if state["chapter"] == 19:
         ending = ENDING_TEXT.get(state["ending"])
         if ending:
             ending_title, ending_details = ending
