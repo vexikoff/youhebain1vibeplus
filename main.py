@@ -23,6 +23,7 @@ from textual.widgets import Input, Button
 from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
 import multiprocessing
+import call_events
 from vibe_plus import default_state as default_vibe_plus_state
 from vibe_plus import normalize_state as normalize_vibe_plus_state
 from vibe_plus import run as run_vibe_plus
@@ -351,6 +352,7 @@ def save_game():
         "vibe_plus": vibe_plus_state,
         "achievements": achievements_state,
         "case_journal": case_journal_entries,
+        "call_events": call_events_state,
     }
     with open("save.json", "w") as f:
         json.dump(save_data, f)
@@ -382,7 +384,7 @@ def refresh_achievements(events=None):
     return False
 
 def load_game():
-    global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state, case_journal_entries, achievements_state
+    global ochko, pomit, chkj, ksosna, truba, tolyayonk, musordrop, vzorv, vany, v220, darkness, vanya, tormoz, ochkonet, netsv, nevernulday, mich, sport, michc, pomitp, nevernul, tolya22, daytolya, musor, cdis, vexi, cdiss, gamecorpscam, dro, igr, drc, dss, rib, juing, rrib, opencr, gamecorp, dike, day, posilka, data_base, chh, dayav, ddv, mmv, dayav2, mmv2, imya, gvozd, police, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, knj, vibe_plus_state, case_journal_entries, achievements_state, call_events_state
     try:
         with open("save.json", "r") as f:
             save_data = json.load(f)
@@ -449,6 +451,7 @@ def load_game():
             vibe_plus_state = normalize_vibe_plus_state(save_data.get("vibe_plus"))
             case_journal_entries = normalize_case_journal(save_data.get("case_journal", []))
             achievements_state = achievements.normalize_state(save_data.get("achievements"))
+            call_events_state = call_events.normalize_state(save_data.get("call_events"))
             ochkoA = save_data.get("ochkoA")
             ochkoB = save_data.get("ochkoB")
             return True
@@ -558,6 +561,7 @@ tolyayonk = 0
 vibe_plus_state = default_vibe_plus_state()
 case_journal_entries = []
 achievements_state = achievements.default_state()
+call_events_state = call_events.default_state()
 cooldowns = {
     "pomit": 0,
     "pomitp": 0,
@@ -1009,7 +1013,7 @@ def koncovka_dolgo():
     os._exit(0)
 
 async def main():
-    global pomit, v220, pomitp, dike, ksosna, tormoz, tolyayonk, musordrop, darkness, truba, vanya, musor, michc, sport, vany, vexi, ochkonet, knj, nevernulday, nevernul, dro, cdis, cdiss, igr, dss, drc, ochko, zvonok, zvv, rib, rrib, opencr, gamecorp, day, posilka, data_base, chh, dayav, dayav2, mmv, mmv2, imya, ddv, gvozd, in_action, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, police, vany, achievements_state
+    global pomit, v220, pomitp, dike, ksosna, tormoz, tolyayonk, musordrop, darkness, truba, vanya, musor, michc, sport, vany, vexi, ochkonet, knj, nevernulday, nevernul, dro, cdis, cdiss, igr, dss, drc, ochko, zvonok, zvv, rib, rrib, opencr, gamecorp, day, posilka, data_base, chh, dayav, dayav2, mmv, mmv2, imya, ddv, gvozd, in_action, tolea_sdan, psiholog, paranoya_day, paranoya_shown, koncovka_active, mearephone, tolya_dialog, path_tolya, path_police, police, vany, achievements_state, call_events_state
     
     global cooldowns
     cooldowns["call"] = time.time() + random.uniform(15.0, 20.0)
@@ -1034,6 +1038,7 @@ async def main():
         cooldowns["dayav2"] = current_time + random.uniform(10.0, 50.0)
     
     cooldowns["call"] = current_time + random.uniform(15.0, 60.0)
+    call_event_catalog = call_events.event_catalog()
     
     while True:
         current_time = time.time()
@@ -1115,6 +1120,20 @@ async def main():
                 available_calls.append(24)
             if day >= 26 and tolyayonk == 0:
                 available_calls.append(25)
+
+            event_flags = {
+                "dss": dss,
+                "opencr": opencr,
+                "gamecorp": gamecorp,
+                "data_base": data_base,
+                "mearephone": mearephone,
+            }
+            available_event_ids = set(
+                call_events.available_events(call_events_state, day, event_flags)
+            )
+            for event_index, event in enumerate(call_event_catalog):
+                if event["id"] in available_event_ids:
+                    available_calls.append(call_events.EVENT_SLOT_BASE + event_index)
             
             if len(available_calls) > 0 and not in_action:
                 zvv = True
@@ -1130,6 +1149,44 @@ async def main():
                     ldk = "Кстати у вас большой член."
                 if answer_call and ra > 0:
                     refresh_achievements({"event": "call_answered"})
+                    if (
+                        call_events.EVENT_SLOT_BASE
+                        <= ra
+                        < call_events.EVENT_SLOT_BASE + len(call_event_catalog)
+                    ):
+                        event = call_event_catalog[ra - call_events.EVENT_SLOT_BASE]
+                        console.print(Panel(
+                            f"{event['caller']}: {event['opening']}",
+                            border_style="yellow",
+                            title=event["title"],
+                        ))
+                        for choice_number, event_choice in enumerate(event["choices"], start=1):
+                            console.print(f"[cyan]{choice_number}.[/] {event_choice['label']}")
+                        event_choice_number = Prompt.ask(
+                            "Выбор",
+                            choices=[str(index) for index in range(1, len(event["choices"]) + 1)],
+                            default="1",
+                        )
+                        event_choice_id = event["choices"][int(event_choice_number) - 1]["id"]
+                        call_events_state, effect = call_events.resolve_choice(
+                            call_events_state,
+                            event["id"],
+                            event_choice_id,
+                            day,
+                            event_flags,
+                        )
+                        previous_points = ochko
+                        ochko = max(0, ochko + effect["points_delta"])
+                        applied_points = ochko - previous_points
+                        console.print(f"{event['caller']}: {effect['reply']}")
+                        if applied_points:
+                            console.print(f"[yellow]Баланс изменён на {applied_points:+} очков.[/]")
+                        record_case(
+                            f"call_event:{event['id']}:{event_choice_id}",
+                            f"Звонок {event['caller']}: {effect['reply']}",
+                        )
+                        save_game()
+                        continue
                     if ra == 1:
                         os.system('cls' if os.name == 'nt' else 'clear')
                         time.sleep(1.2)
