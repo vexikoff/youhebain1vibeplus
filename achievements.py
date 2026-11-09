@@ -5,6 +5,67 @@ from rich.table import Table
 
 ACHIEVEMENT_VERSION = 1
 
+VIBE_ROUTE_VALUES = {
+    "standard",
+    "premium",
+    "exam",
+    "exam_passed",
+    "blind_sign",
+    "full_text",
+    "honest",
+    "blame",
+    "refuse",
+    "press",
+    "consultant",
+    "tolya",
+    "appeal",
+    "settlement",
+    "bank",
+    "regulator",
+    "union",
+    "refund",
+    "exploit",
+}
+VIBE_ORIGIN_ROUTE_VALUES = {"press", "consultant", "tolya"}
+VIBE_ENDING_VALUES = {
+    "refund",
+    "regulator",
+    "union",
+    "whistleblower",
+    "settlement",
+    "loophole",
+    "appeal_denied",
+    "public_exposure",
+    "legal_victory",
+    "corporate_surrender",
+    "company_accepted",
+    "counter_claim",
+    "third_party",
+    "consented_archive",
+    "protected_archive",
+    "anonymous_summary",
+}
+VIBE_FINAL_ENDINGS = {
+    "company_accepted",
+    "counter_claim",
+    "third_party",
+    "consented_archive",
+    "protected_archive",
+    "anonymous_summary",
+}
+VIBE_SIDE_QUEST_VALUES = {
+    "completed",
+    "billing_records",
+    "subscriber_testimony",
+}
+VIBE_ARCHIVE_POLICIES = {
+    "public_consented",
+    "consent_pending",
+    "restricted",
+    "summary_only",
+    "skipped",
+}
+
 STAT_KEYS = (
     "days",
     "points_earned",
@@ -162,6 +223,96 @@ ACHIEVEMENTS = (
         "description": "Собрать четыре документа в деле Vibe Plus.",
         "condition": "vibe_evidence >= 4",
     },
+    {
+        "id": "dlc_archive_consent",
+        "title": "Согласие в приложении",
+        "description": "Завершить дело после публикации историй с подтверждённым согласием.",
+        "condition": "vibe_archive_policy == 'public_consented' and vibe_case_completed",
+    },
+    {
+        "id": "dlc_archive_restricted",
+        "title": "Архив не для всех",
+        "description": "Завершить дело с архивом, доступным только судебной группе.",
+        "condition": "vibe_archive_policy == 'restricted' and vibe_case_completed",
+    },
+    {
+        "id": "dlc_archive_summary",
+        "title": "Сводка без подробностей",
+        "description": "Завершить дело, передав только обезличенную сводку.",
+        "condition": "vibe_archive_policy == 'summary_only' and vibe_case_completed",
+    },
+    {
+        "id": "dlc_archive_declined",
+        "title": "Не публиковать — тоже выбор",
+        "description": "Завершить дело, сознательно пропустив архив жалоб.",
+        "condition": "vibe_archive_policy == 'skipped' and vibe_case_completed",
+    },
+    {
+        "id": "dlc_consent_pending",
+        "title": "Письмо с просьбой подождать",
+        "description": "Завершить дело, оставив публикацию закрытой до ответа на запрос согласия.",
+        "condition": "vibe_archive_policy == 'consent_pending' and vibe_case_completed",
+    },
+    {
+        "id": "dlc_trusted_evidence",
+        "title": "Доверие подшито к делу",
+        "description": "Завершить дело с доверием не ниже 3 и минимум четырьмя доказательствами.",
+        "condition": "vibe_trust >= 3 and vibe_evidence >= 4 and vibe_case_completed",
+    },
+    {
+        "id": "dlc_private_evidence",
+        "title": "Документы под замком",
+        "description": "Завершить дело с доверием и доказательствами, сохранив закрытый или сводный архив.",
+        "condition": "vibe_trust >= 2 and vibe_evidence >= 2 and vibe_archive_policy in ('restricted', 'summary_only') and vibe_case_completed",
+    },
+    {
+        "id": "dlc_sidequest_documents",
+        "title": "Побочка пошла в папку",
+        "description": "Завершить побочное дело и основное разбирательство минимум с четырьмя доказательствами.",
+        "condition": "vibe_side_quest in ('billing_records', 'subscriber_testimony', 'completed') and vibe_evidence >= 4 and vibe_case_completed",
+    },
+    {
+        "id": "dlc_testimony_route",
+        "title": "Свидетели — в общий чат",
+        "description": "Собрать показания подписчиков и завершить дело по маршруту их объединения.",
+        "condition": "vibe_side_quest == 'subscriber_testimony' and vibe_route == 'union' and vibe_case_completed",
+    },
+    {
+        "id": "dlc_ending_consented",
+        "title": "Согласие зафиксировано",
+        "description": "Получить финал публикации с согласием.",
+        "condition": "vibe_ending == 'consented_archive'",
+    },
+    {
+        "id": "dlc_ending_protected",
+        "title": "Архив под защитой",
+        "description": "Получить финал защищённого архива.",
+        "condition": "vibe_ending == 'protected_archive'",
+    },
+    {
+        "id": "dlc_ending_summary",
+        "title": "Имена оставили за кадром",
+        "description": "Получить финал обезличенной сводки.",
+        "condition": "vibe_ending == 'anonymous_summary'",
+    },
+    {
+        "id": "dlc_ending_counterclaim",
+        "title": "Встречное предложение",
+        "description": "Получить финал встречного требования к компании.",
+        "condition": "vibe_ending == 'counter_claim'",
+    },
+    {
+        "id": "dlc_ending_independent",
+        "title": "Независимая подпись",
+        "description": "Получить финал передачи документов третьей стороне.",
+        "condition": "vibe_ending == 'third_party'",
+    },
+    {
+        "id": "dlc_press_route",
+        "title": "Заголовок проверен юристом",
+        "description": "Завершить разбирательство, начав его по маршруту независимой прессы.",
+        "condition": "vibe_origin_route == 'press' and vibe_case_completed",
+    },
 )
 
 ACHIEVEMENT_IDS = tuple(item["id"] for item in ACHIEVEMENTS)
@@ -218,6 +369,8 @@ def build_context(snapshot, vibe_plus):
     if not isinstance(snapshot, dict):
         snapshot = {}
     for key, value in snapshot.items():
+        if isinstance(key, str) and key.startswith("vibe_"):
+            continue
         if isinstance(value, bool) or not isinstance(value, int):
             continue
         context[key] = value
@@ -227,14 +380,31 @@ def build_context(snapshot, vibe_plus):
         if not isinstance(chapter, bool) and isinstance(chapter, int):
             context["vibe_chapter"] = max(0, chapter)
         evidence = vibe_plus.get("evidence", 0)
-        if not isinstance(evidence, bool) and isinstance(evidence, int):
+        if not isinstance(evidence, bool) and isinstance(evidence, int) and evidence >= 0:
             context["vibe_evidence"] = max(0, evidence)
+        route = vibe_plus.get("route")
+        if isinstance(route, str) and route in VIBE_ROUTE_VALUES:
+            context["vibe_route"] = route
+        origin_route = vibe_plus.get("origin_route")
+        if isinstance(origin_route, str) and origin_route in VIBE_ORIGIN_ROUTE_VALUES:
+            context["vibe_origin_route"] = origin_route
+        ending = vibe_plus.get("ending")
+        if isinstance(ending, str) and ending in VIBE_ENDING_VALUES:
+            context["vibe_ending"] = ending
+            context["vibe_case_completed"] = ending in VIBE_FINAL_ENDINGS
         side_quest = vibe_plus.get("side_quest")
-        if isinstance(side_quest, str):
+        if isinstance(side_quest, str) and side_quest in VIBE_SIDE_QUEST_VALUES:
             context["vibe_side_quest"] = side_quest
+        archive_policy = vibe_plus.get("archive_policy")
+        if isinstance(archive_policy, str) and archive_policy in VIBE_ARCHIVE_POLICIES:
+            context["vibe_archive_policy"] = archive_policy
         trust_level = vibe_plus.get("trust_level", 0)
-        if not isinstance(trust_level, bool) and isinstance(trust_level, int):
-            context["vibe_trust"] = max(0, trust_level)
+        if (
+            not isinstance(trust_level, bool)
+            and isinstance(trust_level, int)
+            and trust_level in range(5)
+        ):
+            context["vibe_trust"] = trust_level
 
     stats = context.get("stats")
     if isinstance(stats, dict):

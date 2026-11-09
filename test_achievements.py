@@ -6,6 +6,25 @@ from rich.console import Console
 import achievements
 
 
+NEW_DLC_IDS = (
+    "dlc_archive_consent",
+    "dlc_archive_restricted",
+    "dlc_archive_summary",
+    "dlc_archive_declined",
+    "dlc_consent_pending",
+    "dlc_trusted_evidence",
+    "dlc_private_evidence",
+    "dlc_sidequest_documents",
+    "dlc_testimony_route",
+    "dlc_ending_consented",
+    "dlc_ending_protected",
+    "dlc_ending_summary",
+    "dlc_ending_counterclaim",
+    "dlc_ending_independent",
+    "dlc_press_route",
+)
+
+
 class AchievementStateTests(unittest.TestCase):
     def test_default_and_legacy_save_state(self):
         old_save = {"day": 7, "ochko": 120, "vibe_plus": {"chapter": 2}}
@@ -141,6 +160,142 @@ class AchievementStateTests(unittest.TestCase):
 
         self.assertIn("dlc_side_business", achievements.check(context))
 
+    def test_build_context_normalizes_stable_dlc_fields(self):
+        context = achievements.build_context(
+            {"day": 5, "ochko": 300},
+            {
+                "chapter": 38,
+                "route": "union",
+                "origin_route": "press",
+                "ending": "consented_archive",
+                "evidence": 4,
+                "trust_level": 3,
+                "side_quest": "subscriber_testimony",
+                "archive_policy": "public_consented",
+            },
+        )
+
+        self.assertEqual(context["vibe_route"], "union")
+        self.assertEqual(context["vibe_origin_route"], "press")
+        self.assertEqual(context["vibe_ending"], "consented_archive")
+        self.assertEqual(context["vibe_evidence"], 4)
+        self.assertEqual(context["vibe_trust"], 3)
+        self.assertEqual(context["vibe_side_quest"], "subscriber_testimony")
+        self.assertEqual(context["vibe_archive_policy"], "public_consented")
+        self.assertTrue(context["vibe_case_completed"])
+
+    def test_each_new_dlc_achievement_has_a_reachable_condition(self):
+        final = {"ending": "company_accepted"}
+        cases = {
+            "dlc_archive_consent": {**final, "archive_policy": "public_consented"},
+            "dlc_archive_restricted": {**final, "archive_policy": "restricted"},
+            "dlc_archive_summary": {**final, "archive_policy": "summary_only"},
+            "dlc_archive_declined": {**final, "archive_policy": "skipped"},
+            "dlc_consent_pending": {**final, "archive_policy": "consent_pending"},
+            "dlc_trusted_evidence": {**final, "trust_level": 3, "evidence": 4},
+            "dlc_private_evidence": {
+                **final,
+                "trust_level": 2,
+                "evidence": 2,
+                "archive_policy": "restricted",
+            },
+            "dlc_sidequest_documents": {
+                **final,
+                "side_quest": "billing_records",
+                "evidence": 4,
+            },
+            "dlc_testimony_route": {
+                **final,
+                "side_quest": "subscriber_testimony",
+                "route": "union",
+            },
+            "dlc_ending_consented": {"ending": "consented_archive"},
+            "dlc_ending_protected": {"ending": "protected_archive"},
+            "dlc_ending_summary": {"ending": "anonymous_summary"},
+            "dlc_ending_counterclaim": {"ending": "counter_claim"},
+            "dlc_ending_independent": {"ending": "third_party"},
+            "dlc_press_route": {**final, "origin_route": "press"},
+        }
+
+        self.assertEqual(set(cases), set(NEW_DLC_IDS))
+        for achievement_id, vibe_state in cases.items():
+            with self.subTest(achievement_id=achievement_id):
+                context = achievements.build_context({}, vibe_state)
+                self.assertIn(achievement_id, achievements.check(context))
+
+    def test_missing_or_damaged_dlc_fields_do_not_unlock_new_achievements(self):
+        context = achievements.build_context(
+            {
+                "vibe_case_completed": 1,
+                "vibe_ending": "consented_archive",
+                "vibe_archive_policy": "public_consented",
+            },
+            {
+                "route": ["union"],
+                "origin_route": "forged",
+                "ending": ["consented_archive"],
+                "evidence": -1,
+                "trust_level": 99,
+                "side_quest": "not-a-side-quest",
+                "archive_policy": "forged",
+            },
+        )
+
+        self.assertNotIn("vibe_case_completed", context)
+        self.assertNotIn("vibe_ending", context)
+        self.assertNotIn("vibe_route", context)
+        self.assertNotIn("vibe_origin_route", context)
+        self.assertNotIn("vibe_evidence", context)
+        self.assertNotIn("vibe_trust", context)
+        self.assertNotIn("vibe_side_quest", context)
+        self.assertNotIn("vibe_archive_policy", context)
+        self.assertFalse(set(NEW_DLC_IDS) & set(achievements.check(context)))
+
+    def test_archive_achievements_require_a_recognized_final_ending(self):
+        for policy in (
+            "public_consented",
+            "restricted",
+            "summary_only",
+            "skipped",
+            "consent_pending",
+        ):
+            with self.subTest(policy=policy):
+                context = achievements.build_context(
+                    {},
+                    {"ending": "not-a-final-ending", "archive_policy": policy},
+                )
+                self.assertFalse(set(NEW_DLC_IDS) & set(achievements.check(context)))
+
+    def test_new_unlocks_survive_repeated_updates(self):
+        context = achievements.build_context(
+            {"day": 5, "ochko": 100},
+            {
+                "ending": "company_accepted",
+                "archive_policy": "restricted",
+                "trust_level": 3,
+                "evidence": 4,
+                "side_quest": "billing_records",
+            },
+        )
+        state = achievements.update(achievements.default_state(), context)
+
+        self.assertTrue(
+            {
+                "dlc_archive_restricted",
+                "dlc_trusted_evidence",
+                "dlc_private_evidence",
+                "dlc_sidequest_documents",
+            }.issubset(state["unlocked"])
+        )
+        self.assertIs(achievements.update(state, context), state)
+
+        updated = achievements.update(state, {"day": 6, "ochko": 100})
+        self.assertTrue(set(NEW_DLC_IDS).intersection(updated["unlocked"]))
+        self.assertEqual(
+            updated["unlocked"]["dlc_archive_restricted"],
+            state["unlocked"]["dlc_archive_restricted"],
+        )
+
     def test_render_shows_achievements_and_stats(self):
         output = io.StringIO()
         console = Console(file=output, force_terminal=False, color_system=None)
@@ -156,6 +311,24 @@ class AchievementStateTests(unittest.TestCase):
         self.assertIn("Достижения и статистика прохождения", rendered)
         self.assertIn("Прожито дней", rendered)
         self.assertIn("ещё нет", rendered)
+
+    def test_render_shows_new_records_and_full_count(self):
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False, color_system=None)
+        state = achievements.default_state()
+        state["unlocked"]["dlc_ending_consented"] = 2
+
+        achievements.render(console, state, {}, {})
+
+        rendered = output.getvalue()
+        self.assertIn("Согласие в приложении", rendered)
+        self.assertIn("получено", rendered)
+        self.assertIn(f"1 из {len(achievements.ACHIEVEMENTS)}", rendered)
+        for achievement_id in NEW_DLC_IDS:
+            achievement = next(
+                item for item in achievements.ACHIEVEMENTS if item["id"] == achievement_id
+            )
+            self.assertIn(achievement["title"], rendered)
 
 
 if __name__ == "__main__":
