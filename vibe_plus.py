@@ -6,16 +6,6 @@ from rich.table import Table
 from rich.text import Text
 
 
-ENDINGS = {
-    ("press", "1"): "Договор опубликован. Юрист подписался на рассылку.",
-    ("press", "2"): "Личные данные скрыты. Мелкий шрифт — нет.",
-    ("consultant", "1"): "Кнопка найдена. Она была на первой странице.",
-    ("consultant", "2"): "Вы ушли с компенсацией и корпоративной кружкой.",
-    ("tolya", "1"): "Толя проверил договор. Теперь подписка боится Толю.",
-    ("tolya", "2"): "Письмо разослано. Кто-то нажал. Не вы.",
-}
-
-
 def default_state():
     return {"chapter": 0, "route": "", "ending": ""}
 
@@ -30,9 +20,9 @@ def normalize_state(value):
 
     route = value.get("route", "")
     ending = value.get("ending", "")
-    if not isinstance(route, str) or route not in {"", "auditor", "insider", "press", "consultant", "tolya"}:
+    if not isinstance(route, str):
         route = ""
-    if not isinstance(ending, str) or ending not in set(ENDINGS.values()):
+    if not isinstance(ending, str):
         ending = ""
 
     return {"chapter": chapter, "route": route, "ending": ending}
@@ -56,14 +46,13 @@ def _show_dossier(console, state, day, points):
     else:
         status = f"Досье закрыто: {state['ending']}"
 
-    header = Text()
-    header.append("V I B E   P L U S\n", style="bold bright_magenta")
-    header.append("РАСШИРЕНИЕ • «УСЛОВИЯ ПРИМЕНЕНИЯ» • ВЕРСИЯ 1.0\n\n", style="dim")
-    header.append(f"{status}\n", style="white")
-    header.append(f"Баланс: {points} очков", style="green")
-    header.append(f"   День: {day}", style="cyan")
     console.print(Panel(
-        header,
+        Text.from_markup(
+            "[bold bright_magenta]V I B E   P L U S[/]\n"
+            "[dim]РАСШИРЕНИЕ • «УСЛОВИЯ ПРИМЕНЕНИЯ» • ВЕРСИЯ 1.0[/]\n\n"
+            f"[white]{status}[/]\n"
+            f"[green]Баланс: {points} очков[/]   [cyan]День: {day}[/]"
+        ),
         border_style="bright_magenta",
         title="[bold white]ВНЕШНИЙ МОДУЛЬ[/]",
         subtitle="[dim]Любое сходство с подписками случайно и списывается ежемесячно[/]",
@@ -107,15 +96,9 @@ def run(console, points, day, saved_state):
         return points, state
 
     if state["chapter"] == 1:
-        introduction = (
-            "Независимый аудитор нашёл тариф «Бессрочный пробный период»: "
-            "первые 14 лет бесплатно, дальше — по настроению бухгалтерии."
-            if state["route"] == "auditor"
-            else "За 80 очков вам открыли внутренний договор. В нём есть пункт "
-            "«отмена подписки»: он напечатан белым по белому."
-        )
         console.print(Panel(
-            introduction,
+            "Юрист называет тариф «Бессрочный пробный период»: первые 14 лет "
+            "бесплатно, дальше — по настроению бухгалтерии.",
             border_style="yellow",
         ))
         console.print("[cyan]1.[/] Передать договор независимой газете")
@@ -146,24 +129,25 @@ def run(console, points, day, saved_state):
             console.print("[cyan]2.[/] Потребовать тихую компенсацию (+160 очков)")
         choice = Prompt.ask("Финальный выбор", choices=["1", "2"], default="1")
         points += 240 if choice == "1" else 160
-        state.update(chapter=3, ending=ENDINGS.get((state["route"], choice), "Подписка отменена. Деньги начислены."))
-        result = Text()
-        result.append("ДЕЛО ЗАКРЫТО\n", style="bold green")
-        result.append(f"{state['ending']}\n")
-        result.append(f"+{240 if choice == '1' else 160} очков", style="cyan")
+        endings = {
+            ("press", "1"): "Договор опубликован. Юрист подписался на рассылку.",
+            ("press", "2"): "Личные данные скрыты. Мелкий шрифт — нет.",
+            ("consultant", "1"): "Кнопка найдена. Она была на первой странице.",
+            ("consultant", "2"): "Вы ушли с компенсацией и корпоративной кружкой.",
+            ("tolya", "1"): "Толя проверил договор. Теперь подписка боится Толю.",
+            ("tolya", "2"): "Письмо разослано. Кто-то нажал. Не вы.",
+        }
+        state.update(chapter=3, ending=endings.get((state["route"], choice), "Подписка отменена. Деньги начислены."))
         console.print(Panel(
-            result,
+            f"[bold green]ДЕЛО ЗАКРЫТО[/]\n{state['ending']}\n[cyan]+{240 if choice == '1' else 160} очков[/]",
             border_style="green",
             title="[bold]VIBE PLUS[/]",
         ))
         return points, state
 
     console.print(Panel(
-        Text.assemble(
-            ("КОНТЕНТ ПРОЙДЕН\n", "bold green"),
-            (f"{state['ending']}\n"),
-            ("Новая функция: вы теперь узнаёте слово «автопродление» с первого взгляда.", "dim"),
-        ),
+        f"[bold green]КОНТЕНТ ПРОЙДЕН[/]\n{state['ending']}\n"
+        "[dim]Новая функция: вы теперь узнаёте слово «автопродление» с первого взгляда.[/]",
         border_style="green",
     ))
     return points, state
