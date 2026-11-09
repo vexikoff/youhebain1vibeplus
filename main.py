@@ -10,6 +10,7 @@ import threading
 from rich.prompt import Prompt
 import msvcrt
 import json
+import sys
 import pygame
 import requests
 import uuid
@@ -24,6 +25,10 @@ from vibe_plus import normalize_state as normalize_vibe_plus_state
 from vibe_plus import run as run_vibe_plus
 
 console = Console()
+
+def asset_path(filename):
+    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, filename)
 
 WH_URL = "https://api.vexikoff.workers.dev/support"
 HMAC_SECRET = "8790b5d7f7b436ee372f83515e667a8dd7407033d30c03760cf8e799921a9ac0"
@@ -586,7 +591,7 @@ def koncovka_neutral():
     os.system('cls' if os.name == 'nt' else 'clear')
     time.sleep(2)
     pygame.mixer.init()
-    pygame.mixer.music.load('3.wav')
+    pygame.mixer.music.load(asset_path('3.wav'))
     pygame.mixer.music.play(-1)
     console.print("")
     console.print("[white]КОНЦОВКА 3 ИЗ 8: Нейтрал[/]")
@@ -650,7 +655,7 @@ def koncovka_predatel(name):
 
     if knj == 0:
         pygame.init()
-        sfx = pygame.mixer.Sound('pirok.wav') # звук пырка ножом
+        sfx = pygame.mixer.Sound(asset_path('pirok.wav'))
         sfxc = pygame.mixer.Channel(1) # звук пырка ножом
         sfxc.set_volume(1.0) # звук пырка ножом
         sfxc.play(sfx) # звук пырка ножом
@@ -666,7 +671,7 @@ def koncovka_predatel(name):
         time.sleep(4)
         os.system('cls' if os.name == 'nt' else 'clear')
         time.sleep(2)
-        pygame.mixer.music.load('1.wav')
+        pygame.mixer.music.load(asset_path('1.wav'))
         pygame.mixer.music.play(-1)
         console.print("")
         console.print("[white]КОНЦОВКА 1 ИЗ 8: ПРЕДАТЕЛЬ[/]")
@@ -697,7 +702,7 @@ def koncovka_predatel(name):
         time.sleep(2.5)
         console.print("Вы достаете кинжал...")
         pygame.init()
-        sfx = pygame.mixer.Sound('pirokkin.wav') # звук пырка кинжалом
+        sfx = pygame.mixer.Sound(asset_path('pirokkin.wav'))
         sfxc = pygame.mixer.Channel(1) # звук пырка кинжалом
         sfxc.set_volume(1.0) # звук пырка кинжалом
         sfxc.play(sfx) # звук пырка кинжалом
@@ -708,7 +713,7 @@ def koncovka_predatel(name):
         time.sleep(3)
         console.print("[red]Не зря вам дали этот кинжал.[/]")
         time.sleep(3)
-        pygame.mixer.music.load('8.wav')
+        pygame.mixer.music.load(asset_path('8.wav'))
         pygame.mixer.music.play(-1)
         console.print("")
         console.print("[white]КОНЦОВКА 6 ИЗ 8: Самозащитник[/]")
@@ -762,7 +767,7 @@ def koncovka_dolgi():
 
     if knj == 0:
         pygame.init()
-        sfx = pygame.mixer.Sound('pirok.wav') # звук пырка ножом
+        sfx = pygame.mixer.Sound(asset_path('pirok.wav'))
         sfxc = pygame.mixer.Channel(1) # звук пырка ножом
         sfxc.set_volume(1.0) # звук пырка ножом
         sfxc.play(sfx) # звук пырка ножом
@@ -778,7 +783,7 @@ def koncovka_dolgi():
         time.sleep(4)
         os.system('cls' if os.name == 'nt' else 'clear')
         time.sleep(2)
-        pygame.mixer.music.load('9.wav')
+        pygame.mixer.music.load(asset_path('9.wav'))
         pygame.mixer.music.play(-1)
         console.print("")
         console.print("[white]КОНЦОВКА 8 ИЗ 8: Верни Бабло[/]")
@@ -803,7 +808,7 @@ def koncovka_dolgi():
         time.sleep(2.5)
         console.print("Вы достаете кинжал...")
         pygame.init()
-        sfx = pygame.mixer.Sound('pirokkin.wav') # звук пырка кинжалом
+        sfx = pygame.mixer.Sound(asset_path('pirokkin.wav'))
         sfxc = pygame.mixer.Channel(1) # звук пырка кинжалом
         sfxc.set_volume(1.0) # звук пырка кинжалом
         sfxc.play(sfx) # звук пырка кинжалом
@@ -814,7 +819,7 @@ def koncovka_dolgi():
         time.sleep(3)
         console.print("[red]Не зря вам дали этот кинжал.[/]")
         time.sleep(3)
-        pygame.mixer.music.load('8.wav')
+        pygame.mixer.music.load(asset_path('8.wav'))
         pygame.mixer.music.play(-1)
         console.print("")
         console.print("[white]КОНЦОВКА 6 ИЗ 8: Самозащитник[/]")
@@ -849,7 +854,7 @@ def koncovka_police():
     os.system('cls' if os.name == 'nt' else 'clear')
     time.sleep(2)
     pygame.mixer.init()
-    pygame.mixer.music.load('5.wav')
+    pygame.mixer.music.load(asset_path('5.wav'))
     pygame.mixer.music.play(-1)
     console.print("")
     console.print("[white]КОНЦОВКА 5 ИЗ 8: СКАМ ДОМА[/]")
@@ -875,7 +880,7 @@ def koncovka_data():
     os.system('cls' if os.name == 'nt' else 'clear')
     time.sleep(2)
     pygame.mixer.init()
-    pygame.mixer.music.load('4.wav')
+    pygame.mixer.music.load(asset_path('4.wav'))
     pygame.mixer.music.play(-1)
     console.print("")
     console.print("[white]КОНЦОВКА 2 ИЗ 8: СКАМ ДАТА БАЗОЙ[/]")
@@ -901,7 +906,7 @@ def koncovka_notdata():
     os.system('cls' if os.name == 'nt' else 'clear')
     time.sleep(2)
     pygame.mixer.init()
-    pygame.mixer.music.load('6.wav')
+    pygame.mixer.music.load(asset_path('6.wav'))
     pygame.mixer.music.play(-1)
     console.print("")
     console.print("[white]КОНЦОВКА 4 ИЗ 8: СКАМ УГРОЗОЙ[/]")
@@ -927,7 +932,7 @@ def koncovka_dolgo():
     os.system('cls' if os.name == 'nt' else 'clear')
     time.sleep(2)
     pygame.mixer.init()
-    pygame.mixer.music.load('7.wav')
+    pygame.mixer.music.load(asset_path('7.wav'))
     pygame.mixer.music.play(-1)
     console.print("[white]Секретная концовка открыта.[/]")
     console.print("")
