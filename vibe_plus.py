@@ -26,8 +26,39 @@ CHAPTERS = (
     "Второе заседание",
     "Архив жалоб",
     "Ответ компании",
+    "Письмо, которое всё-таки пришло",
+    "Реестр обещаний",
+    "Сверка с банком",
+    "Совет подписчиков",
+    "Аудит без печати",
+    "Проверка исполнения",
+    "Апелляция на апелляцию",
+    "Общественный отчёт",
+    "План последствий",
     "Досье закрыто",
 )
+
+CONTINUATION_OPTIONS = {
+    "letter": ("opened", "delegated"),
+    "promises": ("deadlines", "wording"),
+    "bank_check": ("reconciled", "statement_requested", "unverified"),
+    "council": ("collective", "delegates"),
+    "audit": ("certified", "pending", "internal"),
+    "verification": ("documented", "discrepancies", "spot_check"),
+    "appeal": ("regulator", "ombudsman"),
+    "report": ("public", "held", "sealed"),
+    "plan": ("monitoring", "appeal", "settlement"),
+}
+
+CONTINUATION_RESULT_TEXT = {
+    "compliance_monitored": "Исполнение обещаний поставили на контроль. "
+    "В этот раз у контроля появился календарь.",
+    "monitoring_pending": "Контроль назначен, но части документов всё ещё не хватает.",
+    "appeal_reopened": "Новая проверка открыта. Уведомления уже попросили отсрочку.",
+    "appeal_pending": "Повторную апелляцию приняли, но доказательств для решения пока недостаточно.",
+    "supervised_settlement": "Соглашение оставили под внешним наблюдением и с проверяемыми сроками.",
+    "settlement_pending": "Стороны согласились продолжить переговоры под наблюдением.",
+}
 
 ENDING_TEXT = {
     "refund": (
@@ -115,7 +146,7 @@ ENDING_TEXT = {
 
 def default_state():
     return {
-        "version": 5,
+        "version": 6,
         "chapter": 0,
         "route": "",
         "origin_route": "",
@@ -126,6 +157,9 @@ def default_state():
         "trust_level": 0,
         "evidence": 0,
         "archive_policy": None,
+        "previous_ending": "",
+        "continuation": {name: None for name in CONTINUATION_OPTIONS},
+        "continuation_result": "",
     }
 
 
@@ -152,6 +186,9 @@ def normalize_state(value):
     trust_level = value.get("trust_level", 0)
     evidence = value.get("evidence", 0)
     archive_policy = value.get("archive_policy", None)
+    previous_ending = value.get("previous_ending", "")
+    continuation_source = value.get("continuation", {})
+    continuation_result = value.get("continuation_result", "")
 
     if not isinstance(route, str):
         route = ""
@@ -180,6 +217,18 @@ def normalize_state(value):
         "skipped",
     ):
         archive_policy = None
+    if not isinstance(previous_ending, str):
+        previous_ending = ""
+    if not isinstance(continuation_source, dict):
+        continuation_source = {}
+    continuation = {
+        name: continuation_source.get(name)
+        if continuation_source.get(name) in options
+        else None
+        for name, options in CONTINUATION_OPTIONS.items()
+    }
+    if not isinstance(continuation_result, str) or continuation_result not in CONTINUATION_RESULT_TEXT:
+        continuation_result = ""
 
     if source_version == 1 and chapter == 11:
         chapter = 13
@@ -197,6 +246,10 @@ def normalize_state(value):
         chapter = 18
     if source_version < 5 and chapter >= 17:
         chapter += 1
+    if source_version < 6 and chapter == 19:
+        chapter = len(CHAPTERS) - 1
+        if ending and not previous_ending:
+            previous_ending = ending
     if chapter not in range(len(CHAPTERS)):
         chapter = 0
     if source_version < 3 and source_chapter == 11 and not ending and ending_was_valid:
@@ -205,7 +258,7 @@ def normalize_state(value):
         ending = "Вы закрыли досье. Уведомления пока думают, что это не окончательно."
 
     return {
-        "version": 5,
+        "version": 6,
         "chapter": chapter,
         "route": route,
         "origin_route": origin_route,
@@ -216,6 +269,9 @@ def normalize_state(value):
         "trust_level": trust_level,
         "evidence": evidence,
         "archive_policy": archive_policy,
+        "previous_ending": previous_ending,
+        "continuation": continuation,
+        "continuation_result": continuation_result,
     }
 
 
@@ -272,6 +328,24 @@ def _show_dossier(console, state, day, points):
     elif chapter == 18:
         status = "Ответ компании"
     elif chapter == 19:
+        status = "Письмо, которое всё-таки пришло"
+    elif chapter == 20:
+        status = "Реестр обещаний"
+    elif chapter == 21:
+        status = "Сверка с банком"
+    elif chapter == 22:
+        status = "Совет подписчиков"
+    elif chapter == 23:
+        status = "Аудит без печати"
+    elif chapter == 24:
+        status = "Проверка исполнения"
+    elif chapter == 25:
+        status = "Апелляция на апелляцию"
+    elif chapter == 26:
+        status = "Общественный отчёт"
+    elif chapter == 27:
+        status = "План последствий"
+    elif chapter == 28:
         status = f"Досье закрыто: {state['ending']}"
     else:
         status = "Ожидание"
@@ -291,7 +365,7 @@ def _show_dossier(console, state, day, points):
         subtitle="[dim]Любое сходство с подписками случайно и списывается ежемесячно[/]",
         padding=(1, 2),
     ))
-    console.print(Panel(progress, border_style="cyan", title="Досье: 19 игровых глав"))
+    console.print(Panel(progress, border_style="cyan", title=f"Досье: {len(CHAPTERS) - 1} игровых глав"))
 
 
 def run(console, points, day, saved_state):
@@ -947,16 +1021,283 @@ def run(console, points, day, saved_state):
                 final_ending = "anonymous_summary"
             else:
                 final_ending = "third_party"
-        state.update(chapter=19, ending=final_ending)
+        state.update(
+            chapter=19,
+            ending=final_ending,
+            previous_ending=final_ending,
+        )
         return points, state
 
     if state["chapter"] == 19:
+        previous_result = ENDING_TEXT.get(
+            state["previous_ending"] or state["ending"],
+            ("Результат сохранён.", ""),
+        )[0]
+        archive_scenes = {
+            "public_consented": "Разрешённые обезличенные истории уже опубликованы.",
+            "consent_pending": "Ответы рассказчиков ещё ждут; вложения закрыты.",
+            "restricted": "Архив по-прежнему доступен только судебной группе.",
+            "summary_only": "Вместо историй доступна только обезличенная сводка.",
+            "skipped": "Архив жалоб вы не заводили.",
+        }
+        console.print(Panel(
+            f"После результата «{previous_result}» пришло письмо от компании. "
+            "В нём обещают всё исправить, но забыли указать, что именно.\n\n"
+            + archive_scenes.get(state["archive_policy"], "Приложений к письму пока нет."),
+            border_style="yellow",
+            title="Письмо, которое всё-таки пришло",
+        ))
+        console.print("[cyan]1.[/] Открыть письмо и проверить срок ответа")
+        console.print("[cyan]2.[/] Переслать письмо представителям подписчиков")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        state["continuation"]["letter"] = "opened" if choice == "1" else "delegated"
+        state["chapter"] = 20
+        return points, state
+
+    if state["chapter"] == 20:
+        letter_scenes = {
+            "opened": "В письме есть обещание, срок и сноска, которая пытается стать главным документом.",
+            "delegated": "Совет подписчиков открыл пересланное письмо. Файл называется "
+            "«ответ_точно_окончательный_финал.pdf».",
+        }
+        console.print(Panel(
+            letter_scenes.get(state["continuation"]["letter"], "Письмо всё ещё в пути."),
+            border_style="yellow",
+            title="Реестр обещаний",
+        ))
+        console.print("[cyan]1.[/] Записать обещания вместе со сроками и ответственными")
+        console.print("[cyan]2.[/] Сохранить только формулировки компании")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        state["continuation"]["promises"] = "deadlines" if choice == "1" else "wording"
+        state["chapter"] = 21
+        return points, state
+
+    if state["chapter"] == 21:
+        route_scenes = {
+            "bank": "Банк узнаёт номер дела. На этот раз соединение не требует отдельного заявления.",
+            "refund": "Банк нашёл платёж. Теперь он проверяет, не нашёл ли его кто-то раньше.",
+            "regulator": "Банк просит приложить распоряжение регулятора, даже если его ещё нет.",
+            "union": "Подписчики принесли выписки. У каждой своя версия банковского приложения.",
+        }
+        promise_scene = (
+            "Сроки из реестра можно сверить с транзакциями."
+            if state["continuation"]["promises"] == "deadlines"
+            else "Без сроков даже выписка выглядит как календарь, который не хочет брать ответственность."
+        )
+        console.print(Panel(
+            route_scenes.get(state["route"], "Банк изучает историю платежей.")
+            + "\n\n"
+            + promise_scene,
+            border_style="yellow",
+            title="Сверка с банком",
+        ))
+        console.print("[cyan]1.[/] Сверить операции с письмом компании")
+        console.print("[cyan]2.[/] Запросить заверенную выписку")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            is_reconciled = (
+                state["continuation"]["letter"] == "opened"
+                and state["continuation"]["promises"] == "deadlines"
+                and state["route"] in ("bank", "refund")
+                and state["evidence"] >= 2
+            )
+            state["continuation"]["bank_check"] = (
+                "reconciled" if is_reconciled else "unverified"
+            )
+        else:
+            state["continuation"]["bank_check"] = "statement_requested"
+        state["chapter"] = 22
+        return points, state
+
+    if state["chapter"] == 22:
+        bank_scenes = {
+            "reconciled": "Суммы сошлись с обещаниями. Совпадение впервые выглядит подозрительно полезным.",
+            "statement_requested": "Заверенная выписка готовится. Банк заверил, что подготовка уже началась.",
+            "unverified": "Сверка не подтвердила обещания: документы разошлись раньше, чем участники заседания.",
+        }
+        console.print(Panel(
+            bank_scenes.get(state["continuation"]["bank_check"], "Совет ждёт банковские данные."),
+            border_style="yellow",
+            title="Совет подписчиков",
+        ))
+        console.print(f"[yellow]Доверие участников: {state['trust_level']}/4[/]")
+        console.print("[cyan]1.[/] Принять общее решение всем советом")
+        console.print("[cyan]2.[/] Передать переговоры выбранным представителям")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        state["continuation"]["council"] = "collective" if choice == "1" else "delegates"
+        state["chapter"] = 23
+        return points, state
+
+    if state["chapter"] == 23:
+        archive_audit_scenes = {
+            "public_consented": "Аудитор изучает только опубликованные обезличенные истории.",
+            "consent_pending": "Вложения без согласия не открывают; проверяют только финансовые документы.",
+            "restricted": "Аудит проходит в закрытом архиве, доступ к которому ограничен.",
+            "summary_only": "Проверяют сводные данные, не отдельные истории.",
+            "skipped": "Архива нет, зато остались банковские документы и обещания.",
+        }
+        council_scene = (
+            "Общий совет сверяет выводы."
+            if state["continuation"]["council"] == "collective"
+            else "Представители сверяют выводы и обещают не потерять остальных подписчиков."
+        )
+        console.print(Panel(
+            archive_audit_scenes.get(state["archive_policy"], "Аудитор работает только с материалами дела.")
+            + "\n\n"
+            + council_scene,
+            border_style="yellow",
+            title="Аудит без печати",
+        ))
+        console.print("[cyan]1.[/] Позвать независимого аудитора")
+        console.print("[cyan]2.[/] Провести внутреннюю проверку по открытым документам")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            can_certify = (
+                state["evidence"] >= 2
+                and state["trust_level"] >= 2
+                and state["continuation"]["bank_check"] == "reconciled"
+                and state["continuation"]["council"] == "collective"
+            )
+            state["continuation"]["audit"] = "certified" if can_certify else "pending"
+        else:
+            state["continuation"]["audit"] = "internal"
+        state["chapter"] = 24
+        return points, state
+
+    if state["chapter"] == 24:
+        audit_scenes = {
+            "certified": "Аудитор подтвердил совпадение записей и не стал заверять печатью собственное отсутствие печати.",
+            "pending": "Аудитору нужны дополнительные подтверждения; одного оптимизма в приложении нет.",
+            "internal": "Внутренняя проверка завершилась внутренним сообщением о внутреннем успехе.",
+        }
+        console.print(Panel(
+            audit_scenes.get(state["continuation"]["audit"], "Результат проверки ещё не готов."),
+            border_style="yellow",
+            title="Проверка исполнения",
+        ))
+        console.print("[cyan]1.[/] Сверить выполненные обещания с документами")
+        console.print("[cyan]2.[/] Попросить выборочную проверку операций")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        if choice == "1":
+            is_documented = (
+                state["continuation"]["audit"] == "certified"
+                and state["continuation"]["promises"] == "deadlines"
+            )
+            state["continuation"]["verification"] = (
+                "documented" if is_documented else "discrepancies"
+            )
+        else:
+            state["continuation"]["verification"] = "spot_check"
+        state["chapter"] = 25
+        return points, state
+
+    if state["chapter"] == 25:
+        verification_scenes = {
+            "documented": "Сроки и документы совпали. Компания попросила сверить ещё и календарь.",
+            "discrepancies": "В обещаниях обнаружились расхождения; юристы назвали их особенностью формата.",
+            "spot_check": "Выборочная проверка нашла детали, которые обычно выбирают не замечать.",
+        }
+        console.print(Panel(
+            verification_scenes.get(
+                state["continuation"]["verification"],
+                "Сроки исполнения пока не подтверждены.",
+            ),
+            border_style="yellow",
+            title="Апелляция на апелляцию",
+        ))
+        console.print("[cyan]1.[/] Подать повторную жалобу регулятору")
+        console.print("[cyan]2.[/] Передать спор независимому омбудсмену")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="1")
+        state["continuation"]["appeal"] = "regulator" if choice == "1" else "ombudsman"
+        state["chapter"] = 26
+        return points, state
+
+    if state["chapter"] == 26:
+        appeal_scenes = {
+            "regulator": "Регулятор принимает повторную жалобу и просит приложить не повторную жалобу.",
+            "ombudsman": "Омбудсмен готов изучить спор, если стороны не начнут изучать друг друга.",
+        }
+        console.print(Panel(
+            appeal_scenes.get(state["continuation"]["appeal"], "Новая инстанция запросила материалы."),
+            border_style="yellow",
+            title="Общественный отчёт",
+        ))
+        console.print("[cyan]1.[/] Опубликовать только разрешённые обезличенные сведения")
+        console.print("[cyan]2.[/] Передать закрытый отчёт выбранной инстанции")
+        choice = Prompt.ask("Выбор", choices=["1", "2"], default="2")
+        if choice == "1":
+            can_publish = (
+                state["archive_policy"] in ("public_consented", "summary_only")
+                and state["evidence"] >= 2
+                and state["trust_level"] >= 2
+            )
+            state["continuation"]["report"] = "public" if can_publish else "held"
+        else:
+            state["continuation"]["report"] = "sealed"
+        state["chapter"] = 27
+        return points, state
+
+    if state["chapter"] == 27:
+        report_scenes = {
+            "public": "Опубликован только разрешённый обезличенный отчёт; личные истории остались закрытыми.",
+            "held": "Отчёт отложен: для публикации не хватает согласия или подтверждённых документов.",
+            "sealed": "Закрытый отчёт передан инстанции без публичного раскрытия историй.",
+        }
+        console.print(Panel(
+            report_scenes.get(state["continuation"]["report"], "Отчёт ещё не готов."),
+            border_style="yellow",
+            title="План последствий",
+        ))
+        console.print("[cyan]1.[/] Назначить контроль сроков и исполнения")
+        console.print("[cyan]2.[/] Добиваться повторного решения по апелляции")
+        console.print("[cyan]3.[/] Согласовать контролируемое урегулирование")
+        choice = Prompt.ask("Выбор", choices=["1", "2", "3"], default="1")
+        if choice == "1":
+            state["continuation"]["plan"] = "monitoring"
+            result = (
+                "compliance_monitored"
+                if state["continuation"]["verification"] == "documented"
+                and state["continuation"]["report"] in ("public", "sealed")
+                else "monitoring_pending"
+            )
+        elif choice == "2":
+            state["continuation"]["plan"] = "appeal"
+            result = (
+                "appeal_reopened"
+                if state["continuation"]["appeal"] == "regulator"
+                and state["continuation"]["audit"] == "certified"
+                and state["evidence"] >= 3
+                and state["trust_level"] >= 2
+                else "appeal_pending"
+            )
+        else:
+            state["continuation"]["plan"] = "settlement"
+            result = (
+                "supervised_settlement"
+                if state["continuation"]["bank_check"] == "reconciled"
+                and state["trust_level"] >= 2
+                else "settlement_pending"
+            )
+        state.update(chapter=28, continuation_result=result)
+        return points, state
+
+    if state["chapter"] == 28:
         ending = ENDING_TEXT.get(state["ending"])
         if ending:
             ending_title, ending_details = ending
             ending_message = f"[bold bright_magenta]{ending_title}[/]\n\n{ending_details}"
         else:
             ending_message = f"[bold bright_magenta]ДОСЬЕ ЗАКРЫТО[/]\n{state['ending']}"
+        continuation_result = CONTINUATION_RESULT_TEXT.get(
+            state["continuation_result"],
+            "",
+        )
+        if state["previous_ending"] and state["previous_ending"] != state["ending"]:
+            previous_result = ENDING_TEXT.get(state["previous_ending"])
+            previous_title = previous_result[0] if previous_result else state["previous_ending"]
+            ending_message += f"\n\n[bold cyan]Прежний итог: {previous_title}[/]"
+        if continuation_result:
+            ending_message += f"\n\n[bold cyan]Продолжение: {continuation_result}[/]"
         console.print(Panel(
             f"{ending_message}\n\nДокументы: {state['evidence']}   "
             f"Доверие: {state['trust_level']}/4\n"
